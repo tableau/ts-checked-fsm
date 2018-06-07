@@ -1,11 +1,37 @@
 {
   "name": "redux-saga-observer",
-  "version": "1.0.0",
+  "version": "0.1.5",
   "description": "Contains redux sagas that operate on state change rather than actions",
   "main": "index.js",
+  "typings": "./src/types/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "setup": "yarn install",
+    "test": "karma start test/karma.conf.js --single-run",
+    "testWatch": "karma start test/karma.conf.js --no-single-run",
+    "build": "webpack --config webpack.config.js"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jasmine": "2.5.53",
+    "copy-pkg-json-webpack-plugin": "0.0.38",
+    "electron": "2.0.2",
+    "jasmine-core": "3.1.0",
+    "karma": "2.0.2",
+    "karma-chrome-launcher": "2.2.0",
+    "karma-electron": "6.0.0",
+    "karma-jasmine": "1.1.2",
+    "karma-webpack": "3.0.0",
+    "redux": "3.5.0",
+    "redux-saga": "0.16.0",
+    "redux-saga-test-plan": "3.7.0",
+    "typescript": "2.9.2",
+    "ts-loader": "4.3.1",
+    "webpack": "4.11.1",
+    "webpack-command": "0.2.1"
+  },
+  "peerDependencies": {
+    "redux": ">=3.5.0",
+    "redux-saga": ">=0.16.0"
+  }
 }

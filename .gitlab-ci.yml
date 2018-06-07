@@ -1,0 +1,15 @@
+image: beneaththeink/node-xvfb
+
+stages:
+  - test
+
+job1:
+  stage: test
+  script:
+    - npm run setup
+    - npm run test
+  only:
+    - branches
+  tags:
+    - nerv-aws-docker-linux
+

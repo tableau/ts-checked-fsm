@@ -1,13 +1,11 @@
 {
-  "name": "redux-saga-observer",
-  "version": "0.1.5",
-  "description": "Contains redux sagas that operate on state change rather than actions",
+  "name": "ts-state-machine",
+  "version": "0.1.0",
+  "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
   "main": "index.js",
   "typings": "./src/types/index.d.ts",
   "scripts": {
     "setup": "yarn install",
-    "test": "karma start test/karma.conf.js --single-run",
-    "testWatch": "karma start test/karma.conf.js --no-single-run",
     "build": "webpack --config webpack.config.js"
   },
   "author": "",
@@ -15,7 +13,7 @@
   "devDependencies": {
     "@types/jasmine": "2.5.53",
     "copy-pkg-json-webpack-plugin": "0.0.38",
-    "electron": "2.0.2",
+    "electron": "3.0.11",
     "jasmine-core": "3.1.0",
     "karma": "2.0.2",
     "karma-chrome-launcher": "2.2.0",
@@ -25,8 +23,8 @@
     "redux": "3.5.0",
     "redux-saga": "0.16.0",
     "redux-saga-test-plan": "3.7.0",
-    "typescript": "2.9.2",
-    "ts-loader": "4.3.1",
+    "ts-loader": "5.3.1",
+    "typescript": "3.2.2",
     "webpack": "4.11.1",
     "webpack-command": "0.2.1"
   },

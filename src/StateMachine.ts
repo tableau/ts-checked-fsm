@@ -45,7 +45,7 @@ export function stateMachine(): StateMachineBuilder<never, never, never> {
 }
 
 function state<States, Datas, Transitions>(): <S, D>(s: S) => StateBuilder<States | S extends States ? never : S, Datas | StateData<S, D>, Transitions> {
-  return <S, D>(s: S) => {
+  return <S, D>(_s: S) => {
     return {
       state: state<States | S, Datas | StateData<S, D>, Transitions>(),
       transition: transition<States | S, Datas, Transitions>(),
@@ -54,7 +54,7 @@ function state<States, Datas, Transitions>(): <S, D>(s: S) => StateBuilder<State
 }
 
 function transition<States, Datas, Transitions>(): <S extends States, N extends States>(curState: S, next: N ) => TransitionBuilder<States, Datas, Transitions | Transition<S, N>> {
-  return <S, N>(curState: S, next: N) => {
+  return <S, N>(_curState: S, _next: N) => {
     return {
       transition: transition<States, Datas, Transitions>(),
       done: done
@@ -63,27 +63,7 @@ function transition<States, Datas, Transitions>(): <S extends States, N extends 
 }
 
 function done<States, Datas, Transitions>(): StateMachine<States, Datas, Transitions> {
-  return <S, SD, N, ND>(cur: StateData<S, SD>, nextData: StateData<N, ND>) => {
+  return <S, SD, N, ND>(_cur: StateData<S, SD>, nextData: StateData<N, ND>) => {
     return nextData;
   }
 }
-
-type HorseData = {
-  horse: string
-}
-
-type CowData = {
-  cow: number
-}
-
-const validate = stateMachine()
-  .state<'a', HorseData>('a')
-  .state<'b', CowData>('b')
-  .state<'c', CowData>('c')
-  .transition('a', 'a')
-  .transition('c', 'b')
-  .transition('a', 'b')
-  .transition('a', 'c')
-  .done();
-
-const foo = validate({ state: 'a', horse: '' }, { state: 'c', cow: 7 });

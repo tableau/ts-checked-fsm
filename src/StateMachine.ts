@@ -5,18 +5,18 @@ type Transition<CurrentState, NextState> = {
 
 type IsString<T> = T extends string ? T : never;
 
-export type StateData<S, D> = D & {
+export type StateData<S, D = {}> = D & {
   readonly state: S;
 }
 
 export type StateMachineBuilder<States, Datas, Transitions> = {
-  readonly state: <S, Data>(
+  readonly state: <S, Data = {}>(
     state: IsString<S> extends States ? never : S
   ) => StateBuilder<States | S, Datas | StateData<S, Data>, Transitions>;
 }
 
 export type StateBuilder<States, Datas, Transitions> = {
-  readonly state: <S, Data>(
+  readonly state: <S, Data = {}>(
     state: IsString<S> extends States ? never : S
   ) => StateBuilder<States | S, Datas | StateData<S, Data>, Transitions>;
   readonly transition: <S extends States, N extends States>(
@@ -45,7 +45,7 @@ export function stateMachine(): StateMachineBuilder<never, never, never> {
 }
 
 function state<States, Datas, Transitions>(): <S, D>(s: S) => StateBuilder<States | S extends States ? never : S, Datas | StateData<S, D>, Transitions> {
-  return <S, D>(_s: S) => {
+  return <S, D = {}>(_s: S) => {
     return {
       state: state<States | S, Datas | StateData<S, D>, Transitions>(),
       transition: transition<States | S, Datas, Transitions>(),

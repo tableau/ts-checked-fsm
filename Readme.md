@@ -2,231 +2,360 @@
 
 ![Community Supported](https://img.shields.io/badge/Support%20Level-Community%20Supported-457387.svg)
 
-redux-saga-observer is a library that provides observer patterns to redux-sagas, allowing powerful abstractions.
+ts-state-machine provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
 
-* [Why redux-saga-observer?]()
-    * [Dispatching on state change](#dispatching-on-state-change)
-    * [Managing concurrency](#managing-concurrency)
+* [Overview]()
+    * [Example problem](#example)
+    * [Introducing states in our type system](#states)
+    * [Compile time state machine validation using ts-state-machine](#ts-state-machine)
 * [Get Started](#get-started)
     * [Requirements](#requirements)
     * [Installation](#installation)
     * [Building](#building)
 * [Contributions](#contributions)
 
-# Why redux-saga-observer?
+# Overview
+Typescript's type system provides powerful abstractions and compile-time correctness guarantees over writing in vanilla Javascript. Tagged unions are a particularly potent Typescript typesystem feature.
 
-[redux-saga](https://github.com/redux-saga/redux-saga) is a powerful set of abstractions for managing asynchronous side effects in redux applications. However, a number of things are either difficult or obtuse in the base library. In particular:
+In particular, they allow you to push application state into the type system. This allows you remove optional and nullable variables and ensure you can only access such variables in states that make sense.
 
-* Sometimes you want to do things when the state changes rather than worry about why it changed.
-* Handling concurrency that may update the redux store in ways your sagas must handle.
+## Example problem
 
-Observers help us out in both cases.
-
-## Dispatching on state change
-
-There may be any number of actions that trigger reducers that operate on some section of your redux store. Suppose you have a checklist backed up in the cloud. Your redux store and the actions that update it look like (in Typescript):
+Suppose we have a text editor. When you first open the editor, you land on a start screen where you're given information about the product and are asked to load or create a new document. However, you don't actually have a document yet. One way to encode this is as follows:
 
 ```
-type State = {
-    readonly lines: string[],
-    readonly name: string
+let doc: null | MyDocument = null;
+let docSaveLocation: null | string = null;
+
+const onClose = () => {
+  if (doc == null) {
+    throw new Error("No document loaded.");
+  }
+
+  closeDocument(doc);
+  doc = null;
+  docSaveLocation = null;
+}
+
+const onNewDocument = () => {
+  if (doc != null) {
+    closeDocument(doc);
+  }
+
+  docSaveLocation = null;
+
+  doc = createNewDocument();
+}
+
+const onSaveAs = () => {
+  if (doc == null) {
+    throw new Error("No document loaded.");
+  }
+
+  newDocSaveLocation = promptUserToSave();
+
+  // If the user cancels the saveas, bail.
+  if (newDocSaveLocation == null) {
+    return;
+  }
+
+  docSaveLocation = newDocSaveLocation;
+
+  // Save as assumes a non-null value in its typing
+  saveDocument(docSaveLocation, doc);
+}
+
+const onSave = () => {
+  if (doc == null) {
+    throw new Error("No document")
+  }
+
+  if (docSaveLocation == null) {
+    throw new Error("Document has never been saved.")
+  }
+
+  // Save assumes a non-null value in its typing
+  save(docSaveLocation, doc);
+}
+
+const onLoad = () => {
+  const newDocSaveLocation = promptUserToOpen();
+
+  // If the user cancels the load, bail
+  if (newDocSaveLocation == null) {
+    return;
+  }
+
+  if (doc != null) {
+    closeDocument(doc);
+  }
+
+  docSaveLocation = newDocSaveLocation;
+
+  doc = openDocument(docSaveLocation);
+}
+
+type MenuItems = {
+  [key: 'New' | 'Open' | 'Close' | 'Save as' | 'Save',]: () => void;
+  
+}
+
+const getMenuItems(): MenuItems {
+  const currentState = docState;
+
+  let menuItems = {
+    'New': () => { new(); },
+    'Open': () => { open(); }
+  };
+
+  if (doc != null) {
+    menuItems = {
+      ...menuItems,
+      'Close': () => { close(); }
+      'Save as': () => { saveAs(); }
+    }
+  }
+
+  if (doc != null && docSaveLocation != null) {
+    menuItems = {
+      ...menuItems,
+      'Save': () => { save(); }
+    }
+  }
+
+  return menuItems;
+}
+
+```
+
+There are a number of problems with this. Firstly, when using strictNullChecks, the type system will always flag doc and docSaveLocation as being possibly null, often redundantly. Indeed, our getMenuItems method has to check for nullity to show the correct menu items while the action methods themselfs have to again check nullity. They have to do this because the actions don't know that their calling context has already checked for null, and thus have to strip the nullity away. If they didn't, they couldn't pass the variables to functions that expect non-null values. 
+
+Secondly, you have to infer from the nullity of these variables what state your application is in. In our example, this happens to work, but what if we add a new type of open that prevents you from saving? You'd need to add a boolean value, which you need to check in all the save functions.
+
+Finally, it's easy to overlook checking for or nulling out a variable. What we need is a finite state machine that explicitly represents having documents loaded or not. 
+
+## Introducing states in our type system
+
+Looking at our example, we can see the following possible times things can be null:
+
+  1. The user has just opened the application or just closed a document. In this case, both doc and docSaveLocation are null. The user can perform the new and open actions.
+  2. The user has clicked new. The doc is now non-null, but not the docSaveLocation. The user can do anything but save, as we don't have a docSaveLocation.
+  3. The user opens a document or clicks save-as. Both doc and docSaveLocation are non-null and the user can perform any action.
+
+Using the above observations, we can encode this information into our type system and refine our design:
+
+```
+type NoDocLoadedState = {
+  state: 'no-document';
+}
+
+type UnnamedDocumentState = {
+  state: 'unnamed-document';
+  doc: MyDocument;
+}
+
+type NamedDocumentState = {
+  state: 'named-document';
+  doc: MyDocument;
+  docSaveLocation: string;
+}
+
+type DocState = NoDocLoadedState | UnnamedDocumentState | NamedDocumentState;
+
+// We start with the NoDocLoadedState type and later transition to other states/types
+let docState: DocState = {
+  state: 'no-document'
 };
 
-type AppendAction = {
-    readonly type: 'ADD_LINE',
-    readonly data: string
-};
+const open = (\_state: DocState) => {
+  const openLocation = promptUserToOpen();
 
-type RemoveAction = {
-    readonly type: 'REMOVE_LINE',
-    readonly index: number
-};
+  if (openLocation == null) {
+    return;
+  }
 
-type InitAction = {
-    readonly type: 'INIT'
+  if (docState.state !== 'no-document') {
+    closeDocument(docState.doc);
+  }
+
+  return {
+    state: 'named-document',
+    docSaveLocation: openLocation,
+    doc: openDocument(openLocation)
+  };
 }
 
-function reducer(state: State, action: AppendAction | RemoveAction): State {
-    switch(action.type) {
-        case 'ADD_LINE':
-            return {
-                ...state,
-                lines: [ state.line, action.data ]
-            };
+const close = (\_state: UnnamedDocumentState | NamedDocumentState) => {
+  closeDocument(state.doc);
 
-        case 'REMOVE_LINE':
-            return {
-                ...state,
-                lines: state.splice(action.index, 1)
-            };
-
-        case 'INIT':
-            return { 
-                ...state,
-                name: 'horsemeat'
-                lines: [] 
-            }
-
-        default:
-            return state;
-    }
+  return {
+    state: 'no-document'
+  };
 }
 
-```
+const saveAs = (state: UnnamedDocumentState | NamedDocumentState) => {
+  const saveAsLocation = promptUserToSave();
 
-In this example, we dispatch REMOVE_LINE to remove the line at an index, ADD_LINE to append to the list, and INIT to initialze an empty list. There are three ways this list can change. Now suppose I create the following saga to save the list:
+  if (saveAsLocation == null) {
+		return;
+	}
 
-```
-type SaveAction = {
-    readonly type: 'SAVE_LIST'
-    readonly name: string,
-    readonly lines: [],
+  return {
+    ...state
+    state: 'named-document',
+    docSaveLocation: saveAsLocation
+  }
 }
 
-function* saveList(payload: SaveAction) {
-    yield call(
-        fetch, 
-        { 
-            method: 'POST',
-            path: '/api/list',
-            data: JSON.stringify({
-                name: payload.name,
-                lines: payload.lines
-            })
-        }
-    );
+const save = (state: NamedDocumentState) => {
+  save(state.docSaveLocation, state.doc);
+
+  return state;
 }
 
-function* handleSaveList(payload: SaveAction) {
-    yield takeEvery('SAVE_LIST', saveList);
+const new = (state: DocState) => {
+  if (state.state === 'unnamed-document' || doc.state === 'named-document') {
+    closeDocument(state.doc);
+  }
+
+  return {
+    state: 'unnamed-document',
+    doc: createNewDocument()
+  }
 }
 
-sagaMiddleware.run(handleSaveList);
-
-```
-
-If we want to save after every change, the producer of SaveAction needs to know that REMOVE_LINE, INIT, and ADD_LINE are all the possible actions that can modify the document. Alternatively, you could change takeEvery to listen to these three actions, in which case it must track all the actions that can possibly modify your document. Either quickly becomes unwieldy as actions distribute across your app; all developers need to remember to update the list of actions anytime they add a new action for manipulating the doc. Observers let you monitor state and dispatch a Saga when when the document changes regardless of the action that triggered it.
-
-In redux-saga-observer, you can add a top level observer using observeAndRun. The above example's missing goo for translating document actions into SAVE_LIST becomes the following:
-
-```
-
-function* autoSave() {
-    yield observeAndRun<State>()
-        .saga(function* (state) {
-            yield call(
-                fetch, 
-                { 
-                    method: 'POST',
-                    path: '/api/list',
-                    data: JSON.stringify({
-                        name: state.name,
-                        lines: state.lines
-                    })
-                }
-            );
-        })
-        .when((oldState, newState) => {
-            return oldState.name !== newState.name ||
-                oldState.lines !== newState.lines;
-        })
-        .run();
+type MenuItems = {
+  [key: 'New' | 'Open' | 'Close' | 'Save as' | 'Save',]: () => void;
 }
 
-sagaMiddleware.run(autoSave);
+const getMenuItems(): MenuItems {
+  const currentState = docState;
 
-```
+  let menuItems = {
+    'New': () => { docState = new(currentState); },
+    'Open': () => { docState = open(currentState); }
+  };
 
-We now save the do whenever the name or lines change in the document regardless of the action that triggered it.
+  if (currentState.state === 'unnamed-document') {
+    menuItems = {
+      ...menuItems,
+      'Save as': () => { docState = save(currentState); },
+      'Close': () => { docState = close(currentState); }
+    };
+  } else if (currentState.state === 'named-document') {
+    menuItems = {
+      ...menuItems,
+      'Save as': () => { docState = saveAs(currentState); }
+      'Save': () => { docState = save(currentState); },
+      'Close': () => { docState = close(currentState); },
+    };
+  }
 
-## Managing concurrency
-
-Another pain point is managing concurrency in a saga. Consider the following changes to our above example:
-
-```
-
-function* saveList(payload: SaveAction) {
-    yield call(
-        fetch, 
-        { 
-            method: 'POST',
-            path: '/api/list',
-            data: JSON.stringify({
-                name: payload.name,
-                lines: payload.lines
-            })
-        }
-    );
-
-    // Check that the user hasn't modified the document while we were saving.
-    if (payload.name !== yield Select(getName) || payload.list !== yield Select(getLines)) {
-        return
-    }
-        
-    const res1 = yield call(someAsyncThing);
-
-    // Check that the user hasn't modified the document while we were doing someAsyncThing.
-    if (payload.name !== yield Select(getName) || payload.list !== yield Select(getLines)) {
-        return
-    }
-        
-    const res2 = yield call(someOtherAsyncThing, res1);
-    
-    // Check that the user hasn't modified the document while we were doing someOtherAsyncThing.
-    if (payload.name !== yield Select(getName) || payload.list !== yield Select(getLines)) {
-        return
-    }
-    
-    yield put({ type: 'SOME_ACTION', result: res2 });
+  return menuItems;
 }
 
 ```
 
-takeLatest can sometimes aleviate all the state checks, but in complex systems this isn't always the case in sufficiently complex apps. With redux-saga-observer, you can put invariants on your saga. If the invariants are ever violated, the saga aborts and you get notified if you need to perform cleanup:
+In this case, we no longer encode state information into the nullity of multiple variables. In fact, the only time we even have to check for nullity anymore is when checking that the user didn't cancel the save as or open prompt!
+
+If we wanted to extend our example to have a read-only open mode, we just add a new state:
 
 ```
-
-function* saveList(payload: SaveAction) {
-    yield runWhile<State>()
-        .saga(function* () {
-            yield call(
-                fetch, 
-                { 
-                    method: 'POST',
-                    path: '/api/list',
-                    data: JSON.stringify({
-                        name: payload.name,
-                        lines: payload.lines
-                    })
-                }
-            );
-                
-            const res1 = yield call(someAsyncThing);
-            const res2 = yield call(someOtherAsyncThing, res1);
-            yield put({ type: 'SOME_ACTION', result: res2 });
-
-        })
-        .invariant('NAME_UNCHANGED', s => s.name === payload.name)
-        .invariant('LINES_UNCHANGED', s => s.lines === payload.lines)
-        .onViolation(function* (state, violations) {
-            // If we need to dispatch some sagas, actions, or whatever for cleanup, do it here.
-        })
-        .run()
+type ReadonlyDocLoadedState = {
+  state: 'readonly-doc';
+  doc: MyDocument;
 }
 
 ```
 
-In the above example, we magically get nice types for violations in our onViolation callback ('NAME_UNCHANGED' | 'LINES_UNCHANGED')[] and state contains the state at the time the invariant was violated. The main saga
-immediately aborts when ANY invariant is violated and you get notified of EVERY broken invariant.
+We then hook this type into DocState and check for its existence in getMenuItems, in which case we omit Save and Save As.
+
+## Compile time state machine validation using ts-state-machine
+
+Our previous above implementation encodes the application state into the type system, providing fewer opportunities for bugs. However, one may note that not all transitions are valid. For example, you never go from having a named document to having an unnamed document. Furthermore, there is no transition from no-document that remains in no-document; opening or newing a document both transition to other states. These are useful invariants to assert, but we'd have to write unit tests to do so with our current design.
+
+ts-state-machine allows us to turn these assertions into compilation errors rather than test failures or runtime exceptions. First, we define our state machine:
+
+```
+import { stateMachine, StateData } from 'ts-state-machine';
+
+type HasDoc = {
+  doc: MyDocument;
+}
+
+type HasDocLocation = {
+  docSaveLocation: string;
+}
+
+const transition = stateMachine()
+  .state('no-document')
+  .state<'unnamed-document', HasDoc>('unnamed-document') // If we have data associated with this state, we have to fill in the generic parameters.
+  .state<'named-document', HasDoc & HasDocLocation>('named-document')
+  .transition('no-document', 'unnamed-document')
+  .transition('no-document', 'named-document')
+  .transition('unnamed-document', 'named-document')
+  .transition('unnamed-document', 'no-document')
+  .transition('named-document', 'named-document') // Allow self-transitions for named-documents
+  .transition('named-document', 'no-document')
+  .done();
+
+```
+
+Then we define our state types. ts-state-machine provides the ```StateData``` type, which concatenates state with an arbitrary object (which shouldn't contain the state key). 
+
+```
+type DocState =
+  StateData<'no-document', {}> |
+  StateData<'unnamed-document', HasDoc> |
+  StateData<'named-document', HasDoc & HasDocLocation>;
+```
+
+We reuse the previous implementations of our actions, noting that they return the next state. We then write our getMenuItems function:
+
+```
+const getMenuItems(): MenuItems {
+  const currentState = docState;
+  switch (currentState.state) {
+    case 'no-document':
+      return {
+        'New': () => { docState = transition(currentState, newDoc(currentState)); },
+        'Open': () => { docState = transition(currentState, open(currentState)); }
+      };
+
+    case 'unnamed-document':
+      return {
+        'New': () => { docState = transition(currentState, newDoc(currentState)); },
+        'Open': () => { docState = transition(currentState, open(currentState)); },
+        'Save as': () => { docState = transition(currentState, saveAs(currentState)); },
+        'Close': () => { docState = transition(currentState, close(currentState)); }
+      };
+
+    case 'named-document':
+      return {
+        'New': () => { docState = transition(currentState, newDoc(currentState)); },
+        'Open': () => { docState = transition(currentState, open(currentState)); },
+        'Save as': () => { docState = transition(currentState, saveAs(currentState)); },
+        'Save': () => { docState = transition(currentState, save(currentState)); },
+        'Close': () => { docState = transition(currentState, close(currentState)); }
+      };
+
+    default:
+      expectNeverHit(currentState.state);
+  }
+}
+```
+
+Each time we call transition, the Typescript type system validates that there exists a valid transition from the current and next state. Additionally, it validates that the types associated with the current and next state match our state machine definition.
+
+If I try to transtion from 'named-document' to 'unnamed-document', then the transition call will fail to compile. Today, error messages are cryptic, e.g. "Type string is not assignable to never".There are type system proposals that would ts-state-machine to give more meaningful messages.
 
 # Get started
 
 ## Requirements:
-* redux 3.5.0 or later
-* redux-saga 0.16.0 or later
+Typescript 3.0+ or equivalent bundler loader (e.g. ts-loader for webpack).
 
 ## Installation
-Add redux-saga-observer as a dependency in your package.json.
+Add ts-state-machine as a dependency in your package.json.
 
 ## Building
 
@@ -244,18 +373,6 @@ yarn run build
 ```
 
 Output appears in lib folder
-
-### Running tests
-```
-yarn run test
-```
-
-### Debugging tests
-```
-yarn run testWatch
-```
-
-Then visit localhost:9876 in the browser of your choice.
 
 # Contributions
 Code contributions and improvements by the community are welcomed!

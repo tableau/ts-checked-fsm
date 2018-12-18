@@ -1,10 +1,10 @@
-# redux-saga-observer
+# ts-state-machine
 
 ![Community Supported](https://img.shields.io/badge/Support%20Level-Community%20Supported-457387.svg)
 
 ts-state-machine provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
 
-* [Overview]()
+* [Overview](#overview)
     * [Example problem](#example)
     * [Introducing states in our type system](#states)
     * [Compile time state machine validation using ts-state-machine](#ts-state-machine)

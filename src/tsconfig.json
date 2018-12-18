@@ -9,7 +9,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "declarationDir": "types"
+    "declarationDir": "../lib/types"
   },
   "files": [
     "index.ts"

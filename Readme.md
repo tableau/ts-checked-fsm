@@ -5,9 +5,9 @@
 ts-state-machine provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
 
 * [Overview](#overview)
-    * [Example problem](#example)
-    * [Introducing states in our type system](#states)
-    * [Compile time state machine validation using ts-state-machine](#ts-state-machine)
+    * [Example problem](#example-problem)
+    * [Introducing states in our type system](#introducing-state-in-our-type-system)
+    * [Compile time state machine validation using ts-state-machine](#compile-time-state-machine-validation-using-ts-state-machine)
 * [Get Started](#get-started)
     * [Requirements](#requirements)
     * [Installation](#installation)

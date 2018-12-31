@@ -18,7 +18,7 @@ type IsStateType<T> = T extends string | number | boolean ? T : never;
  * states coming out of the validate or initialState call get assigned to your states, guaranteeing (unless you resort to casting) that
  * your state machine is within specification at compile time.
  */
-export type StateData<S, D = {}> = D & {
+export type ValidatedState<S, D = {}> = D & {
   readonly state: S;
 
   /**
@@ -34,7 +34,7 @@ export type StateData<S, D = {}> = D & {
  * Private
  * An unbranded state and data tuple to which inline objects will readily assign.
  */
-type UnvalidatedStateData<S, D = {}> = D & {
+export type UnvalidatedState<S, D = {}> = D & {
   readonly state: S;
 }
 
@@ -42,14 +42,14 @@ type UnvalidatedStateData<S, D = {}> = D & {
  * Private
  * A possibly validated state and data named tuple.
  */
-type MaybeValidatedStateData<S, D> = StateData<S, D> | UnvalidatedStateData<S, D>;
+type MaybeValidatedStateData<S, D> = ValidatedState<S, D> | UnvalidatedState<S, D>;
 
 /**
  * Private
  * The state machine definitiion.
  */
 type StateMachineDefinition<IS, ID> = {
-  initialState: StateData<IS, ID>;
+  initialState: ValidatedState<IS, ID>;
 };
 
 /**
@@ -61,7 +61,7 @@ export type StateMachineBuilder<States, Datas, Transitions> = {
    */
   readonly state: <S, Data = {}>(
     state: IsStateType<S> extends States ? never : S
-  ) => StateBuilder<States | S, Datas | UnvalidatedStateData<S, Data>, Transitions>;
+  ) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
 }
 
 /**
@@ -73,7 +73,7 @@ export type StateBuilder<States, Datas, Transitions> = {
    */
   readonly state: <S, Data = {}>(
     state: IsStateType<S> extends States ? never : S
-  ) => StateBuilder<States | S, Datas | UnvalidatedStateData<S, Data>, Transitions>;
+  ) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
 
   /**
    * Sets the initial state for the state machine
@@ -82,7 +82,7 @@ export type StateBuilder<States, Datas, Transitions> = {
 }
 
 type InitialStateFunction<States, Datas, Transitions> = <S extends States, D>(
-  data: UnvalidatedStateData<S, D> extends Datas ? UnvalidatedStateData<S, D> : never
+  data: UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : never
 ) => TransitionBuilder<States, Datas, Transitions, S, D>
 
 /**
@@ -108,7 +108,7 @@ export type TransitionBuilder<States, Datas, Transitions, IS, ID> = {
  */
 export type StateMachine<States, Datas, Transitions, IS, ID> = {
   validateTransition: ValidateFunction<States, Datas, Transitions>,
-  initialState: () => StateData<IS, ID>
+  initialState: () => ValidatedState<IS, ID>
 }
 
 /**
@@ -135,9 +135,9 @@ export type StateMachine<States, Datas, Transitions, IS, ID> = {
  *
  */
 export type ValidateFunction<States, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
-  _cur: UnvalidatedStateData<C, CD> extends Datas ? Transition<C, N> extends Transitions ? MaybeValidatedStateData<C, CD> : never : never,
-  next: UnvalidatedStateData<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : never
-) => StateData<N, ND>;
+  _cur: UnvalidatedState<C, CD> extends Datas ? Transition<C, N> extends Transitions ? MaybeValidatedStateData<C, CD> : never : never,
+  next: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : never
+) => ValidatedState<N, ND>;
 
 /**
  * A state machine type validation function that provides compile-time assertions that the passed state transition is valid.
@@ -146,9 +146,9 @@ export type ValidateFunction<States, Datas, Transitions> = <C extends States, CD
  * @returns If the state transition is valid, this function call will compile and return a validated StateData<N, ND>, which you can assign to other StateData<N, ND> types.
  */
 export type ValidateStateMachine<States, Datas, Transitions> = <S extends States, SD, N extends States, ND>(
-  cur: Transition<S, N> extends Transitions ? UnvalidatedStateData<S, SD> extends Datas ? MaybeValidatedStateData<S, SD> : never : never,
-  next: UnvalidatedStateData<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : never
-) => StateData<N, ND>;
+  cur: Transition<S, N> extends Transitions ? UnvalidatedState<S, SD> extends Datas ? MaybeValidatedStateData<S, SD> : never : never,
+  next: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : never
+) => ValidatedState<N, ND>;
 
 export function stateMachine(): StateMachineBuilder<never, never, never> {
   return {
@@ -156,18 +156,18 @@ export function stateMachine(): StateMachineBuilder<never, never, never> {
   };
 }
 
-function state<States, Datas, Transitions>(): <S, D>(s: S) => StateBuilder<States | S extends States ? never : S, Datas | UnvalidatedStateData<S, D>, Transitions> {
+function state<States, Datas, Transitions>(): <S, D>(s: S) => StateBuilder<States | S extends States ? never : S, Datas | UnvalidatedState<S, D>, Transitions> {
   return <S, D = {}>(_s: S) => {
     return {
-      state: state<States | S, Datas | StateData<S, D>, Transitions>(),
+      state: state<States | S, Datas | ValidatedState<S, D>, Transitions>(),
       initialState: initialState<States | S, Datas, Transitions>(),
     };
   }
 }
 
-function initialState<States, Datas, Transitions>(): <S extends States, D>(initialState: UnvalidatedStateData<S, D>) => TransitionBuilder<States, Datas, Transitions, S, D> {
-  return <S, D = {}>(initialState: UnvalidatedStateData<S, D>) => {
-    const definition = { initialState: initialState as StateData<S, D> };
+function initialState<States, Datas, Transitions>(): <S extends States, D>(initialState: UnvalidatedState<S, D>) => TransitionBuilder<States, Datas, Transitions, S, D> {
+  return <S, D = {}>(initialState: UnvalidatedState<S, D>) => {
+    const definition = { initialState: initialState as ValidatedState<S, D> };
 
     return {
       transition: transition<States, Datas, Transitions, S, D>(definition),
@@ -189,7 +189,7 @@ function done<States, Datas, Transitions, IS, ID>(definition: StateMachineDefini
   return () => {
     return {
       validateTransition: <S, SD, N, ND>(_cur: MaybeValidatedStateData<S, SD>, nextData: MaybeValidatedStateData<N, ND>) => {
-        return nextData as StateData<N, ND>;
+        return nextData as ValidatedState<N, ND>;
       },
       initialState: () => definition.initialState
     }

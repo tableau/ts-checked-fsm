@@ -1,6 +1,7 @@
 export {
   StateBuilder,
-  StateData,
+  ValidatedState,
+  UnvalidatedState,
   stateMachine,
   StateMachine,
   StateMachineBuilder,

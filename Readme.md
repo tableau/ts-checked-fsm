@@ -1,13 +1,13 @@
-# ts-state-machine
+# ts-checked-fsm
 
 ![Community Supported](https://img.shields.io/badge/Support%20Level-Community%20Supported-457387.svg)
 
-ts-state-machine provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
+ts-checked-fsm provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
 
 * [Overview](#overview)
     * [Example problem](#example-problem)
     * [Introducing states in our type system](#introducing-state-in-our-type-system)
-    * [Compile time state machine validation using ts-state-machine](#compile-time-state-machine-validation-using-ts-state-machine)
+    * [Compile time state machine validation using ts-checked-fsm](#compile-time-state-machine-validation-using-ts-checked-fsm)
 * [Get Started](#get-started)
     * [Requirements](#requirements)
     * [Installation](#installation)
@@ -270,14 +270,14 @@ type ReadonlyDocLoadedState = {
 
 We then hook this type into DocState and check for its existence in getMenuItems, in which case we omit Save and Save As.
 
-## Compile time state machine validation using ts-state-machine
+## Compile time state machine validation using ts-checked-fsm
 
 Our previous above implementation encodes the application state into the type system, providing fewer opportunities for bugs. However, one may note that not all transitions are valid. For example, you never go from having a named document to having an unnamed document. Furthermore, there is no transition from no-document that remains in no-document; opening or newing a document both transition to other states. These are useful invariants to assert, but we'd have to write unit tests to do so with our current design.
 
-ts-state-machine allows us to turn these assertions into compilation errors rather than test failures or runtime exceptions. First, we define our state machine:
+ts-checked-fsm allows us to turn these assertions into compilation errors rather than test failures or runtime exceptions. First, we define our state machine:
 
 ```
-import { stateMachine, StateData } from 'ts-state-machine';
+import { stateMachine, StateData } from 'ts-checked-fsm';
 
 type HasDoc = {
   doc: MyDocument;
@@ -301,7 +301,7 @@ const transition = stateMachine()
 
 ```
 
-Then we define our state types. ts-state-machine provides the ```StateData``` type, which concatenates state with an arbitrary object (which shouldn't contain the state key). 
+Then we define our state types. ts-checked-fsm provides the ```StateData``` type, which concatenates state with an arbitrary object (which shouldn't contain the state key). 
 
 ```
 type DocState =
@@ -347,7 +347,7 @@ const getMenuItems(): MenuItems {
 
 Each time we call transition, the Typescript type system validates that there exists a valid transition from the current and next state. Additionally, it validates that the types associated with the current and next state match our state machine definition.
 
-If I try to transtion from 'named-document' to 'unnamed-document', then the transition call will fail to compile. Today, error messages are cryptic, e.g. "Type string is not assignable to never".There are type system proposals that would ts-state-machine to give more meaningful messages.
+If I try to transtion from 'named-document' to 'unnamed-document', then the transition call will fail to compile. Today, error messages are cryptic, e.g. "Type string is not assignable to never".There are type system proposals that would ts-checked-fsm to give more meaningful messages.
 
 # Get started
 
@@ -355,7 +355,7 @@ If I try to transtion from 'named-document' to 'unnamed-document', then the tran
 Typescript 3.0+ or equivalent bundler loader (e.g. ts-loader for webpack).
 
 ## Installation
-Add ts-state-machine as a dependency in your package.json.
+Add ts-checked-fsm as a dependency in your package.json.
 
 ## Building
 

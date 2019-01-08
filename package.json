@@ -1,6 +1,6 @@
 {
-  "name": "ts-state-machine",
-  "version": "0.1.3",
+  "name": "ts-checked-fsm",
+  "version": "0.1.4",
   "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
   "main": "index.js",
   "typings": "types/index.d.ts",

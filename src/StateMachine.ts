@@ -1,5 +1,4 @@
 /**
- * Private
  * Represents a state transition
  */
 type Transition<CurrentState, NextState> = {
@@ -7,6 +6,11 @@ type Transition<CurrentState, NextState> = {
   readonly next: NextState
 }
 
+/**
+ * Represents a compiler error message. Error brands prevent really clever users from naming their states as one of the error messages
+ * and subverting error checking. Yet, the compiler still displays the string at the end of the failed cast indicating what the
+ * issue is rather than something puzzling like could not assign to never.
+ */
 type ErrorBrand<T> = T & { _errorBrand: void };
 
 // type NotAStateTypeError = 'The passed state value is not a state type. States must be string, number, or boolean literal.';
@@ -16,10 +20,8 @@ type IllegalStateError = 'The specified state has not been declared or the other
 type IllegalTransitionError = 'There exists no transition from the specifed current state to the next state.';
 
 /**
- * Private
  * States can be represented as string, number, or boolean literals.
  */
-// type IsStateType<T> = T extends string | number | boolean ? T : ErrorBrand<NotAStateTypeError>;
 type StateType = string | number | boolean;
 
 /**
@@ -51,7 +53,7 @@ export type UnvalidatedState<S, D = {}> = D & {
  * Private
  * A possibly validated state and data named tuple.
  */
-type MaybeValidatedStateData<S, D> = ValidatedState<S, D> | UnvalidatedState<S, D>;
+type MaybeValidatedState<S, D> = ValidatedState<S, D> | UnvalidatedState<S, D>;
 
 /**
  * Private
@@ -91,12 +93,36 @@ export type StateBuilder<States extends StateType, Datas, Transitions> = {
 }
 
 type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends States, D>(
-  data: IsLegalState<S, D, Datas>
+  data: IsLegalStateResolveUnvalidatedState<S, D, Datas>
 ) => TransitionBuilder<States, Datas, Transitions, S, D>
 
-type IsLegalState<S, D, Datas> = UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : ErrorBrand<IllegalStateError>;
-type AssertNewState<S, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-type AssertNewTransition<S, N, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
+/**
+ * A type that validates that UnvalidatedState<S, D> exists in Datas. If so, resolves to UnvalidatedState<S, D>. If not, resolves
+ * to an ErrorBrand.
+ */
+type IsLegalStateResolveUnvalidatedState<S extends StateType, D, Datas> = UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : ErrorBrand<IllegalStateError>;
+
+
+/**
+ * A type that validates that the transition from C to N is legal given the state machine defined by States, Datas, and Transitions. If legal, this type
+ * resolves to a MaybeValidatedStateData<C, CD>. If not, it resolves to an error brand containing the reason.
+ */
+type IsValidStateAndTransitionResolveMaybeValidatedState<States extends StateType, Datas, Transitions, C extends States, CD, N extends States> = UnvalidatedState<C, CD> extends Datas ? (Transition<C, N> extends Transitions ? MaybeValidatedState<C, CD> : ErrorBrand<IllegalTransitionError>) : ErrorBrand<IllegalStateError>;
+
+/**
+ * A type that validates that UnvalidatedState<N, ND> exists in Datas. If so, resolves to a MaybeValidatesState. If not, resolves to an ErrorBrand.
+ */
+type IsValidStateResolveMaybeValidatedState<Datas, N extends StateType, ND> = UnvalidatedState<N, ND> extends Datas ? MaybeValidatedState<N, ND> : ErrorBrand<IllegalStateError>;
+
+/**
+ * A type that validates that S does not exist in States. If so, resolves to an ErrorBrand. If not, resolves to S.
+ */
+type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
+
+/**
+ * A type that validates that Transition<S, N> does not exist in Transitions. If so, resolves to an ErrorBrand. If not, resolves to N.
+ */
+type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
 
 type TransitionFunc<States extends StateType, Datas, Transitions, IS, ID> = <S extends States, N extends States>(
   curState: S,
@@ -121,7 +147,7 @@ export type TransitionBuilder<States extends StateType, Datas, Transitions, IS, 
 /**
  * A state machine
  */
-export type StateMachine<States, Datas, Transitions, IS, ID> = {
+export type StateMachine<States extends StateType, Datas, Transitions, IS, ID> = {
   validateTransition: ValidateFunction<States, Datas, Transitions>,
   initialState: () => ValidatedState<IS, ID>
 }
@@ -149,9 +175,9 @@ export type StateMachine<States, Datas, Transitions, IS, ID> = {
  * @return The next state as a branded state-data tuple object.
  *
  */
-export type ValidateFunction<States, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
-  _cur: UnvalidatedState<C, CD> extends Datas ? Transition<C, N> extends Transitions ? MaybeValidatedStateData<C, CD> : ErrorBrand<IllegalTransitionError> : ErrorBrand<IllegalStateError>,
-  next: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : ErrorBrand<IllegalStateError>
+export type ValidateFunction<States extends StateType, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
+  _cur: IsValidStateAndTransitionResolveMaybeValidatedState<States, Datas, Transitions, C, CD, N>,
+  next: IsValidStateResolveMaybeValidatedState<Datas, N, ND>
 ) => ValidatedState<N, ND>;
 
 export const stateMachine = (): StateMachineBuilder<never, never, never> => {
@@ -174,7 +200,7 @@ const state = <States extends StateType, Datas, Transitions>(): StateFunc<States
 }
 
 const initialState = <States extends StateType, Datas, Transitions>(): InitialStateFunc<States, Datas, Transitions> => {
-  return <S extends States, D = {}>(initialState: IsLegalState<S, D, Datas>) => {
+  return <S extends States, D = {}>(initialState: IsLegalStateResolveUnvalidatedState<S, D, Datas>) => {
     const definition: StateMachineDefinition<S, D> = { initialState: initialState as unknown as ValidatedState<S, D> };
 
     return {
@@ -199,8 +225,8 @@ const transition = <States extends StateType, Datas, Transitions, IS, ID>(defini
 const done = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<States, Datas, Transitions, IS, ID> => {
   return () => {
     const validateTransitionFunction: ValidateFunction<States, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
-      _cur: UnvalidatedState<C, CD> extends Datas ? Transition<C, N> extends Transitions ? MaybeValidatedStateData<C, CD> : ErrorBrand<IllegalTransitionError> : ErrorBrand<IllegalStateError>,
-      nextData: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : ErrorBrand<IllegalStateError>
+      _cur: IsValidStateAndTransitionResolveMaybeValidatedState<States, Datas, Transitions, C, CD, N>,
+      nextData: IsValidStateResolveMaybeValidatedState<Datas, N, ND>
     ) => {
       return nextData as unknown as ValidatedState<N, ND>;
     };

@@ -61,7 +61,9 @@ type StateMachineDefinition<IS, ID> = {
   initialState: ValidatedState<IS, ID>;
 };
 
-
+type StateFunc<States extends StateType, Datas, Transitions> = <S extends StateType, Data = {}>(
+  state: AssertNewState<S, States>
+) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
 
 /**
  * A builder from calling stateMachine().
@@ -70,9 +72,7 @@ export type StateMachineBuilder<States extends StateType, Datas, Transitions> = 
   /**
    * Add a state to this state machine.
    */
-  readonly state: <S extends StateType, Data = {}>(
-    state: AssertNewState<S, States>
-  ) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
+  readonly state: StateFunc<States, Datas, Transitions>;
 }
 
 /**
@@ -82,23 +82,26 @@ export type StateBuilder<States extends StateType, Datas, Transitions> = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: <S extends StateType, Data = {}>(
-    state: AssertNewState<S, States>
-  ) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
+  readonly state: StateFunc<States, Datas, Transitions>;
 
   /**
    * Sets the initial state for the state machine
    */
-  readonly initialState: InitialStateFunction<States, Datas, Transitions>;
+  readonly initialState: InitialStateFunc<States, Datas, Transitions>;
 }
 
-type InitialStateFunction<States extends StateType, Datas, Transitions> = <S extends States, D>(
+type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends States, D>(
   data: IsLegalState<S, D, Datas>
 ) => TransitionBuilder<States, Datas, Transitions, S, D>
 
 type IsLegalState<S, D, Datas> = UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : ErrorBrand<IllegalStateError>;
 type AssertNewState<S, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
 type AssertNewTransition<S, N, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
+
+type TransitionFunc<States extends StateType, Datas, Transitions, IS, ID> = <S extends States, N extends States>(
+  curState: S,
+  nextState: AssertNewTransition<S, N, Transitions>
+) => TransitionBuilder<States, Datas, Transitions | Transition<S, N>, IS, ID>;
 
 /**
  * A builder from calling .transition()
@@ -107,10 +110,7 @@ export type TransitionBuilder<States extends StateType, Datas, Transitions, IS, 
   /**
    * Add a transition to this state machine.
    */
-  readonly transition: <S extends States, N extends States>(
-    curState: S,
-    nextState: AssertNewTransition<S, N, Transitions>
-  ) => TransitionBuilder<States, Datas, Transitions | Transition<S, N>, IS, ID>;
+  readonly transition: TransitionFunc<States, Datas, Transitions, IS, ID>;
 
   /**
    * Finalize the state machine type.
@@ -154,27 +154,15 @@ export type ValidateFunction<States, Datas, Transitions> = <C extends States, CD
   next: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : ErrorBrand<IllegalStateError>
 ) => ValidatedState<N, ND>;
 
-/**
- * A state machine type validation function that provides compile-time assertions that the passed state transition is valid.
- * @param cur The current state of the state machine. May result from a previous validation call or not.
- * @param next The next state of the state machine. May result from a previous validation call or not.
- * @returns If the state transition is valid, this function call will compile and return a validated StateData<N, ND>, which you can assign to other StateData<N, ND> types.
- */
-/*
-export type ValidateStateMachine<States, Datas, Transitions> = <S extends States, SD, N extends States, ND>(
-  cur: Transition<S, N> extends Transitions ? UnvalidatedState<S, SD> extends Datas ? MaybeValidatedStateData<S, SD> : never : never,
-  next: UnvalidatedState<N, ND> extends Datas ? MaybeValidatedStateData<N, ND> : never
-) => ValidatedState<N, ND>;*/
-
-export function stateMachine(): StateMachineBuilder<never, never, never> {
+export const stateMachine = (): StateMachineBuilder<never, never, never> => {
   return {
     state: state<never, never, never>()
   };
 }
 
-function state<States extends StateType, Datas, Transitions>(): <S extends StateType, D = {}>(_s: AssertNewState<S, States>) => StateBuilder<States | S, Datas | UnvalidatedState<S, D>, Transitions> {
+const state = <States extends StateType, Datas, Transitions>(): StateFunc<States, Datas, Transitions> => {
   return <S extends StateType, D = {}>(_s: AssertNewState<S, States>) => {
-    const initialStateFunction: InitialStateFunction<States | S, Datas | UnvalidatedState<S, D>, Transitions> = initialState();
+    const initialStateFunction: InitialStateFunc<States | S, Datas | UnvalidatedState<S, D>, Transitions> = initialState();
 
     const builder: StateBuilder<States | S, Datas | UnvalidatedState<S, D>, Transitions> = {
       state: state<States | S, Datas | UnvalidatedState<S, D>, Transitions>(),
@@ -185,23 +173,19 @@ function state<States extends StateType, Datas, Transitions>(): <S extends State
   }
 }
 
-
-function initialState<States extends StateType, Datas, Transitions>(): <S extends States, D>(initialState: IsLegalState<S, D, Datas>) => TransitionBuilder<States, Datas, Transitions, S, D> {
+const initialState = <States extends StateType, Datas, Transitions>(): InitialStateFunc<States, Datas, Transitions> => {
   return <S extends States, D = {}>(initialState: IsLegalState<S, D, Datas>) => {
     const definition: StateMachineDefinition<S, D> = { initialState: initialState as unknown as ValidatedState<S, D> };
-    const transitionFunction = transition<States, Datas, Transitions, S, D>(definition)
 
-    const builder: TransitionBuilder<States, Datas, Transitions, S, D> = {
-      transition: transitionFunction,
+    return {
+      transition: transition<States, Datas, Transitions, S, D>(definition),
       done: done<States, Datas, Transitions, S, D>(definition)
-    }
-
-    return builder ;
+    };
   };
 }
 
 
-function transition<States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): <S extends States, N extends States>(curState: S, next: AssertNewTransition<S, N, Transitions>) => TransitionBuilder<States, Datas, Transitions | Transition<S,N>, IS, ID> {
+const transition = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): TransitionFunc<States, Datas, Transitions, IS, ID> => {
   return <S extends States, N extends States>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
     const transitionFunction = transition<States, Datas, Transitions | Transition<S, N>, IS, ID>(definition);
 
@@ -212,7 +196,7 @@ function transition<States extends StateType, Datas, Transitions, IS, ID>(defini
   };
 }
 
-function done<States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<States, Datas, Transitions, IS, ID> {
+const done = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<States, Datas, Transitions, IS, ID> => {
   return () => {
     const validateTransitionFunction: ValidateFunction<States, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
       _cur: UnvalidatedState<C, CD> extends Datas ? Transition<C, N> extends Transitions ? MaybeValidatedStateData<C, CD> : ErrorBrand<IllegalTransitionError> : ErrorBrand<IllegalStateError>,

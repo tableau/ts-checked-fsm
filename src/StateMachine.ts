@@ -11,13 +11,12 @@ type Transition<CurrentState, NextState> = {
  * and subverting error checking. Yet, the compiler still displays the string at the end of the failed cast indicating what the
  * issue is rather than something puzzling like could not assign to never.
  */
-type ErrorBrand<T> = T & { _errorBrand: void };
+type ErrorBrand<T> = Readonly<T> & { _errorBrand: void };
 
 // type NotAStateTypeError = 'The passed state value is not a state type. States must be string, number, or boolean literal.';
 type StateAlreadyDeclaredError = 'The specified state has already been declared.';
 type TransitionAlreadyDeclaredError = 'This transition has already been declared.';
 type IllegalStateError = 'The specified state has not been declared or the other keys/values in the state object are invalid or missing.';
-type IllegalTransitionError = 'There exists no transition from the specifed current state to the next state.';
 
 /**
  * States can be represented as string, number, or boolean literals.
@@ -29,7 +28,7 @@ type StateType = string | number | boolean;
  * states coming out of the validate or initialState call get assigned to your states, guaranteeing (unless you resort to casting) that
  * your state machine is within specification at compile time.
  */
-export type ValidatedState<S, D = {}> = D & {
+export type ValidatedState<S, D = {}> = Readonly<D> & {
   readonly state: S;
 
   /**
@@ -45,9 +44,15 @@ export type ValidatedState<S, D = {}> = D & {
  * Private
  * An unbranded state and data tuple to which inline objects will readily assign.
  */
-export type UnvalidatedState<S, D = {}> = D & {
+export type UnvalidatedState<S, D = {}> = Readonly<D> & {
   readonly state: S;
 }
+
+type InferState<S> = S extends MaybeValidatedState<infer S, any> ? S : ErrorBrand<'Passed object is not a state'>;
+
+type TInTransition<Transitions, C, N> = Transition<InferState<C>, InferState<N>> extends Transitions ? C : ErrorBrand<'No transition between specified states'>;
+
+type SInState<States, S> = S extends States ? S : ErrorBrand<'The passed state is not in the set of allowed states'>;
 
 /**
  * Private
@@ -102,18 +107,6 @@ type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends
  */
 type IsLegalStateResolveUnvalidatedState<S extends StateType, D, Datas> = UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : ErrorBrand<IllegalStateError>;
 
-
-/**
- * A type that validates that the transition from C to N is legal given the state machine defined by States, Datas, and Transitions. If legal, this type
- * resolves to a MaybeValidatedStateData<C, CD>. If not, it resolves to an error brand containing the reason.
- */
-type IsValidStateAndTransitionResolveMaybeValidatedState<States extends StateType, Datas, Transitions, C extends States, CD, N extends States> = UnvalidatedState<C, CD> extends Datas ? (Transition<C, N> extends Transitions ? MaybeValidatedState<C, CD> : ErrorBrand<IllegalTransitionError>) : ErrorBrand<IllegalStateError>;
-
-/**
- * A type that validates that UnvalidatedState<N, ND> exists in Datas. If so, resolves to a MaybeValidatesState. If not, resolves to an ErrorBrand.
- */
-type IsValidStateResolveMaybeValidatedState<Datas, N extends StateType, ND> = UnvalidatedState<N, ND> extends Datas ? MaybeValidatedState<N, ND> : ErrorBrand<IllegalStateError>;
-
 /**
  * A type that validates that S does not exist in States. If so, resolves to an ErrorBrand. If not, resolves to S.
  */
@@ -141,14 +134,14 @@ export type TransitionBuilder<States extends StateType, Datas, Transitions, IS, 
   /**
    * Finalize the state machine type.
    */
-  readonly done: () => StateMachine<States, Datas, Transitions, IS, ID>
+  readonly done: () => StateMachine<Datas, Transitions, IS, ID>
 }
 
 /**
  * A state machine
  */
-export type StateMachine<States extends StateType, Datas, Transitions, IS, ID> = {
-  validateTransition: ValidateFunction<States, Datas, Transitions>,
+export type StateMachine<Datas, Transitions, IS, ID> = {
+  validateTransition: ValidateFunction<Datas, Transitions>,
   initialState: () => ValidatedState<IS, ID>
 }
 
@@ -175,10 +168,10 @@ export type StateMachine<States extends StateType, Datas, Transitions, IS, ID> =
  * @return The next state as a branded state-data tuple object.
  *
  */
-export type ValidateFunction<States extends StateType, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
-  _cur: IsValidStateAndTransitionResolveMaybeValidatedState<States, Datas, Transitions, C, CD, N>,
-  next: IsValidStateResolveMaybeValidatedState<Datas, N, ND>
-) => ValidatedState<N, ND>;
+export type ValidateFunction<Datas, Transitions> = <CS, NS>(
+  _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
+  next: SInState<Datas, NS>
+) => NS & { _brand: void };
 
 export const stateMachine = (): StateMachineBuilder<never, never, never> => {
   return {
@@ -205,7 +198,7 @@ const initialState = <States extends StateType, Datas, Transitions>(): InitialSt
 
     return {
       transition: transition<States, Datas, Transitions, S, D>(definition),
-      done: done<States, Datas, Transitions, S, D>(definition)
+      done: done<Datas, Transitions, S, D>(definition)
     };
   };
 }
@@ -217,18 +210,18 @@ const transition = <States extends StateType, Datas, Transitions, IS, ID>(defini
 
     return {
       transition: transitionFunction,
-      done: done<States, Datas, Transitions | Transition<S, N>, IS, ID>(definition)
+      done: done<Datas, Transitions | Transition<S, N>, IS, ID>(definition)
     };
   };
 }
 
-const done = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<States, Datas, Transitions, IS, ID> => {
+const done = <Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<Datas, Transitions, IS, ID> => {
   return () => {
-    const validateTransitionFunction: ValidateFunction<States, Datas, Transitions> = <C extends States, CD, N extends States, ND>(
-      _cur: IsValidStateAndTransitionResolveMaybeValidatedState<States, Datas, Transitions, C, CD, N>,
-      nextData: IsValidStateResolveMaybeValidatedState<Datas, N, ND>
+    const validateTransitionFunction: ValidateFunction<Datas, Transitions> = <CS, NS>(
+      _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
+      next: SInState<Datas, NS>
     ) => {
-      return nextData as unknown as ValidatedState<N, ND>;
+      return next as unknown as NS & { _brand: void };
     };
 
     return {

@@ -1,6 +1,6 @@
 {
   "name": "ts-checked-fsm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
   "main": "index.js",
   "typings": "types/index.d.ts",
@@ -12,8 +12,8 @@
   "license": "ISC",
   "devDependencies": {
     "copy-pkg-json-webpack-plugin": "0.0.39",
-    "ts-loader": "5.3.1",
-    "typescript": "8.0.17",
+    "ts-loader": "8.0.17",
+    "typescript": "4.1.5",
     "webpack": "5.23.0",
     "webpack-command": "0.5.0"
   },

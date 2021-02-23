@@ -61,17 +61,16 @@ module.exports = {
   },
 
   plugins: [
-    function () {
-      this.plugin('done', function (stats) {
-        if (stats.compilation.errors && stats.compilation.errors.length) {
-          process.on('exit', function () {
-            process.exitCode = 1;
-          });
-        }
-      });
-    },
     new CopyPkgJsonPlugin({
-        remove: ['devDependencies', 'scripts']
+        new: {
+          "name": "ts-checked-fsm",
+          "version": "0.3.0",
+          "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
+          "main": "index.js",
+          "typings": "types/index.d.ts",
+          "author": "Rick Weber",
+          "license": "ISC",
+        },
     })
   ]
 };

@@ -160,7 +160,7 @@ export type ActionBuilder<
 > = {
   readonly action: ActionFunc<StateNames, States, Transitions, IS, ID, ActionNames, Actions>;
   
-  readonly actionHandlers: ActionHandlersFunc<
+  readonly actionHandler: ActionHandlerFunc<
     StateNames,
     States,
     Transitions,
@@ -183,22 +183,45 @@ export type ActionFunc<
 
 type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends ActionNameType> = AN extends ActionNames ? ErrorBrand<'Action already defined'> : AN;
 
-export type HandlerMap<StateNames extends StateType, States, ActionNames extends ActionNameType, Actions extends { [key in ActionNames]: Actions[key] }> = {
+/*
+export type HandlerMap<
+  StateNames extends StateType,
+  States,
+  ActionNames extends ActionNameType,
+  Actions
+> = {
   [stateKey in StateNames]: {
-    [actionKey in ActionNames]?: <NextState extends States>(action: Actions[actionKey]) => NextState;
+    [actionKey in keyof Actions]?: <NextState extends States>(action: Actions[actionKey]) => NextState;
   };
-};
+};*/
 
-export type ActionHandlersFunc<
+
+type AssertHandlerMapComplete<StateNames extends StateType, Map> = [keyof Map] extends [StateNames] ? [StateNames] extends [keyof Map] ? Map : ErrorBrand<'State is missing from handler map'> : ErrorBrand<'Extraneous state in state map'>;
+
+type AssertActionNameLegal<ActionNames, ActionName> = ActionName extends ActionNames ? ActionName : ErrorBrand<'Unknown action name'>;
+type AssertActionTagsAreLegal<ActionNames, Map> = { [key in keyof Map]: AssertActionNameLegal<ActionNames, Map[key]>  }
+
+export type IsValidHandlerMap<
+  Map,
+  StateNames extends StateType,
+  States,
+  Transitions,
+  ActionNames extends ActionNameType,
+  Actions
+>  = AssertHandlerMapComplete<StateNames, Map>
+
+type HandlerFunc<Fn, Transitions, C> = Fn extends (curState: C, action: any) => infer N ? TInTransition<C, N, Transitions> : never;
+
+export type ActionHandlerFunc<
   StateNames extends StateType,
   States,
   Transitions,
   IS,
   ID,
   ActionNames extends ActionNameType,
-  Actions,
+  Actions extends { [k in ActionNames]: Actions[k] },
 > = 
-(handlers: HandlerMap<StateNames, States, ActionNames, Actions>) 
+<S extends StateNames, A extends ActionNames, N extends States>(state: S, action: A, handler: (state: S, action: Actions[A]) => N extends UnvalidatedState<infer SN, infer D> ? Transition<S, SN> extends Transitions ? N : ErrorBrand<'Illegal transition'> : ErrorBrand<'Not a state'>) 
   => ActionHandlersBuilder<StateNames, States, Transitions, IS, ID, ActionNames, Actions>;
 
 
@@ -289,19 +312,19 @@ const transition = <StateNames extends StateType, States, Transitions, IS, ID>(d
 const action = <StateNames extends StateType, States, Transitions, IS, ID, ActionNames extends ActionNameType, Actions>(definition: StateMachineDefinition<IS, ID>): ActionFunc<StateNames, States, Transitions, IS, ID, ActionNames, Actions> => {
   return <AN extends ActionNameType, AP>(_actionName: AssertActionNotDefined<AN, ActionNames>) => {
     const actionFunc = action<StateNames, States, Transitions, IS, ID, ActionNames | AN, Actions | Action<AN, AP>>(definition)
-    const actionHandlersFunc = actionHandlers<StateNames, States, Transitions, IS, ID, ActionNames | AN, Actions | Action<AN, AP>>(definition);
+    const actionHandlerFunc = actionHandler<StateNames, States, Transitions, IS, ID, ActionNames | AN, Actions | Action<AN, AP>>(definition);
 
     return {
       action: actionFunc,
-      actionHandlers: actionHandlersFunc,
+      actionHandler: actionHandlerFunc,
     };
   }
 }
 
-const actionHandlers = <StateNames extends StateType, States, Transitions, IS, ID, ActionNames extends ActionNameType, Actions>(definition: StateMachineDefinition<IS, ID>) => {
+const actionHandler = <StateNames extends StateType, States, Transitions, IS, ID, ActionNames extends ActionNameType, Actions>(definition: StateMachineDefinition<IS, ID>) => {
   const doneFunc = done<States, Transitions, IS, ID>(definition);
 
-  return () => {
+  return <S extends StateNames, A extends ActionNames, N extends States>(state: S, action: A, handler: (s: S, action: A) => N extends UnvalidatedState<infer SN, infer D> ? Transition<S, SN> extends Transitions ? N : ErrorBrand<'Illegal transition'> : ErrorBrand<'Not a state'>) => {//actionHandlers: HandlerMap<StateNames, States, ActionNames, Actions>  ) => {
     return { 
       done: doneFunc
     };
@@ -327,25 +350,27 @@ const done = <StateNames, Transitions, IS, ID>(definition: StateMachineDefinitio
 const x = stateMachine()
   .state('a')
   .state('b')
+  .state('c')
   .initialState({state: 'a'})
   .transition('a', 'b')
   .action('a1')
   .action('a2')
-  .actionHandlers({
+  .actionHandler("a", "a1", (c, a) => {
+    return {
+      state: 'b' as const,
+    }
+  })
+  /*.actionHandlers({
     a: {
-      a1: (action) => {
+      a1: () => {
         return {
-          state: 'b'
+          state: 'b' as const,
         }
       }
     },
-    b: {
-      a2: () => {
-
-      }
-    }
+    b: {}
   })
   .done();
-
+*/
   x.initialState;
   x.validateTransition

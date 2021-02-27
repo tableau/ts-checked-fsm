@@ -97,9 +97,9 @@ export type StateBuilder<StateNames extends StateType, States> = {
   readonly initialState: InitialStateFunc<StateNames, States, never>;
 }
 
-type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends States, D>(
-  data: IsLegalStateResolveUnvalidatedState<S, D, Datas>
-) => TransitionBuilder<States, Datas, Transitions, S, D>
+type InitialStateFunc<StateNames extends StateType, States, Transitions> = <S extends StateNames, D>(
+  data: IsLegalStateResolveUnvalidatedState<S, D, States>
+) => TransitionBuilder<StateNames, States, Transitions, S, D>
 
 /**
  * A type that validates that UnvalidatedState<S, D> exists in Datas. If so, resolves to UnvalidatedState<S, D>. If not, resolves
@@ -117,31 +117,31 @@ type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand
  */
 type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
 
-type TransitionFunc<States extends StateType, Datas, Transitions, IS, ID> = <S extends States, N extends States>(
+type TransitionFunc<StateNames extends StateType, States, Transitions, IS, ID> = <S extends StateNames, N extends StateNames>(
   curState: S,
   nextState: AssertNewTransition<S, N, Transitions>
-) => TransitionBuilder<States, Datas, Transitions | Transition<S, N>, IS, ID>;
+) => TransitionBuilder<StateNames, States, Transitions | Transition<S, N>, IS, ID>;
 
 /**
  * A builder from calling .transition()
  */
-export type TransitionBuilder<States extends StateType, Datas, Transitions, IS, ID> = {
+export type TransitionBuilder<StateNames extends StateType, States, Transitions, IS, ID> = {
   /**
    * Add a transition to this state machine.
    */
-  readonly transition: TransitionFunc<States, Datas, Transitions, IS, ID>;
+  readonly transition: TransitionFunc<StateNames, States, Transitions, IS, ID>;
 
   /**
    * Finalize the state machine type.
    */
-  readonly done: () => StateMachine<Datas, Transitions, IS, ID>
+  readonly done: () => StateMachine<States, Transitions, IS, ID>
 }
 
 /**
  * A state machine
  */
-export type StateMachine<Datas, Transitions, IS, ID> = {
-  validateTransition: ValidateFunction<Datas, Transitions>,
+export type StateMachine<States, Transitions, IS, ID> = {
+  validateTransition: ValidateFunction<States, Transitions>,
   initialState: () => ValidatedState<IS, ID>
 }
 
@@ -168,9 +168,9 @@ export type StateMachine<Datas, Transitions, IS, ID> = {
  * @return The next state as a branded state-data tuple object.
  *
  */
-export type ValidateFunction<Datas, Transitions> = <CS, NS>(
-  _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
-  next: SInState<Datas, NS>
+export type ValidateFunction<States, Transitions> = <CS, NS>(
+  _cur: TInTransition<Transitions, SInState<States, CS>, NS>,
+  next: SInState<States, NS>
 ) => NS & { _brand: void };
 
 export const stateMachine = (): StateMachineBuilder => {
@@ -179,12 +179,12 @@ export const stateMachine = (): StateMachineBuilder => {
   };
 }
 
-const state = <States extends StateType, Datas>(): StateFunc<States, Datas> => {
-  return <S extends StateType, D = {}>(_s: AssertNewState<S, States>) => {
-    const initialStateFunc = initialState<States | S, Datas | UnvalidatedState<S, D>, never>();
-    const stateFunc = state<States | S, Datas | UnvalidatedState<S, D>>()
+const state = <StateNames extends StateType, Datas>(): StateFunc<StateNames, Datas> => {
+  return <S extends StateType, D = {}>(_s: AssertNewState<S, StateNames>) => {
+    const initialStateFunc = initialState<StateNames | S, Datas | UnvalidatedState<S, D>, never>();
+    const stateFunc = state<StateNames | S, Datas | UnvalidatedState<S, D>>()
 
-    const builder: StateBuilder<States | S, Datas | UnvalidatedState<S, D>> = {
+    const builder: StateBuilder<StateNames | S, Datas | UnvalidatedState<S, D>> = {
       state: stateFunc,
       initialState: initialStateFunc,
     };
@@ -193,34 +193,34 @@ const state = <States extends StateType, Datas>(): StateFunc<States, Datas> => {
   }
 }
 
-const initialState = <States extends StateType, Datas, Transitions>(): InitialStateFunc<States, Datas, Transitions> => {
-  return <S extends States, D = {}>(initialState: IsLegalStateResolveUnvalidatedState<S, D, Datas>) => {
+const initialState = <StateNames extends StateType, States, Transitions>(): InitialStateFunc<StateNames, States, Transitions> => {
+  return <S extends StateNames, D = {}>(initialState: IsLegalStateResolveUnvalidatedState<S, D, States>) => {
     const definition: StateMachineDefinition<S, D> = { initialState: initialState as unknown as ValidatedState<S, D> };
 
     return {
-      transition: transition<States, Datas, Transitions, S, D>(definition),
-      done: done<Datas, Transitions, S, D>(definition)
+      transition: transition<StateNames, States, Transitions, S, D>(definition),
+      done: done<States, Transitions, S, D>(definition)
     };
   };
 }
 
 
-const transition = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): TransitionFunc<States, Datas, Transitions, IS, ID> => {
-  return <S extends States, N extends States>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
-    const transitionFunction = transition<States, Datas, Transitions | Transition<S, N>, IS, ID>(definition);
+const transition = <StateNames extends StateType, States, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): TransitionFunc<StateNames, States, Transitions, IS, ID> => {
+  return <S extends StateNames, N extends StateNames>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
+    const transitionFunction = transition<StateNames, States, Transitions | Transition<S, N>, IS, ID>(definition);
 
     return {
       transition: transitionFunction,
-      done: done<Datas, Transitions | Transition<S, N>, IS, ID>(definition)
+      done: done<States, Transitions | Transition<S, N>, IS, ID>(definition)
     };
   };
 }
 
-const done = <Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<Datas, Transitions, IS, ID> => {
+const done = <StateNames, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<StateNames, Transitions, IS, ID> => {
   return () => {
-    const validateTransitionFunction: ValidateFunction<Datas, Transitions> = <CS, NS>(
-      _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
-      next: SInState<Datas, NS>
+    const validateTransitionFunction: ValidateFunction<StateNames, Transitions> = <CS, NS>(
+      _cur: TInTransition<Transitions, SInState<StateNames, CS>, NS>,
+      next: SInState<StateNames, NS>
     ) => {
       return next as unknown as NS & { _brand: void };
     };

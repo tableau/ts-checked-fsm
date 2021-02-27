@@ -94,12 +94,12 @@ export type StateBuilder<StateNames extends StateType, States> = {
   /**
    * Sets the initial state for the state machine
    */
-  readonly initialState: InitialStateFunc<StateNames, States, never>;
+  readonly initialState: InitialStateFunc<StateNames, States>;
 }
 
-type InitialStateFunc<StateNames extends StateType, States, Transitions> = <S extends StateNames, D>(
+type InitialStateFunc<StateNames extends StateType, States> = <S extends StateNames, D>(
   data: IsLegalStateResolveUnvalidatedState<S, D, States>
-) => TransitionBuilder<StateNames, States, Transitions, S, D>
+) => TransitionBuilder<StateNames, States, never, S, D>
 
 /**
  * A type that validates that UnvalidatedState<S, D> exists in Datas. If so, resolves to UnvalidatedState<S, D>. If not, resolves
@@ -181,7 +181,7 @@ export const stateMachine = (): StateMachineBuilder => {
 
 const state = <StateNames extends StateType, Datas>(): StateFunc<StateNames, Datas> => {
   return <S extends StateType, D = {}>(_s: AssertNewState<S, StateNames>) => {
-    const initialStateFunc = initialState<StateNames | S, Datas | UnvalidatedState<S, D>, never>();
+    const initialStateFunc = initialState<StateNames | S, Datas | UnvalidatedState<S, D>>();
     const stateFunc = state<StateNames | S, Datas | UnvalidatedState<S, D>>()
 
     const builder: StateBuilder<StateNames | S, Datas | UnvalidatedState<S, D>> = {
@@ -193,13 +193,13 @@ const state = <StateNames extends StateType, Datas>(): StateFunc<StateNames, Dat
   }
 }
 
-const initialState = <StateNames extends StateType, States, Transitions>(): InitialStateFunc<StateNames, States, Transitions> => {
+const initialState = <StateNames extends StateType, States>(): InitialStateFunc<StateNames, States> => {
   return <S extends StateNames, D = {}>(initialState: IsLegalStateResolveUnvalidatedState<S, D, States>) => {
     const definition: StateMachineDefinition<S, D> = { initialState: initialState as unknown as ValidatedState<S, D> };
 
     return {
-      transition: transition<StateNames, States, Transitions, S, D>(definition),
-      done: done<States, Transitions, S, D>(definition)
+      transition: transition<StateNames, States, never, S, D>(definition),
+      done: done<States, never, S, D>(definition)
     };
   };
 }

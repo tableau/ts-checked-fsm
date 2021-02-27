@@ -68,33 +68,33 @@ type StateMachineDefinition<IS, ID> = {
   initialState: ValidatedState<IS, ID>;
 };
 
-type StateFunc<States extends StateType, Datas, Transitions> = <S extends StateType, Data = {}>(
+type StateFunc<States extends StateType, Datas> = <S extends StateType, Data = {}>(
   state: AssertNewState<S, States>
-) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
+) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>>;
 
 /**
  * A builder from calling stateMachine().
  */
-export type StateMachineBuilder<States extends StateType, Datas, Transitions> = {
+export type StateMachineBuilder = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: StateFunc<States, Datas, Transitions>;
+  readonly state: StateFunc<never, never>;
 }
 
 /**
  * A builder from calling .state()
  */
-export type StateBuilder<States extends StateType, Datas, Transitions> = {
+export type StateBuilder<StateNames extends StateType, States> = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: StateFunc<States, Datas, Transitions>;
+  readonly state: StateFunc<StateNames, States>;
 
   /**
    * Sets the initial state for the state machine
    */
-  readonly initialState: InitialStateFunc<States, Datas, Transitions>;
+  readonly initialState: InitialStateFunc<StateNames, States, never>;
 }
 
 type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends States, D>(
@@ -173,19 +173,20 @@ export type ValidateFunction<Datas, Transitions> = <CS, NS>(
   next: SInState<Datas, NS>
 ) => NS & { _brand: void };
 
-export const stateMachine = (): StateMachineBuilder<never, never, never> => {
+export const stateMachine = (): StateMachineBuilder => {
   return {
-    state: state<never, never, never>()
+    state: state<never, never>()
   };
 }
 
-const state = <States extends StateType, Datas, Transitions>(): StateFunc<States, Datas, Transitions> => {
+const state = <States extends StateType, Datas>(): StateFunc<States, Datas> => {
   return <S extends StateType, D = {}>(_s: AssertNewState<S, States>) => {
-    const initialStateFunction: InitialStateFunc<States | S, Datas | UnvalidatedState<S, D>, Transitions> = initialState();
+    const initialStateFunc = initialState<States | S, Datas | UnvalidatedState<S, D>, never>();
+    const stateFunc = state<States | S, Datas | UnvalidatedState<S, D>>()
 
-    const builder: StateBuilder<States | S, Datas | UnvalidatedState<S, D>, Transitions> = {
-      state: state<States | S, Datas | UnvalidatedState<S, D>, Transitions>(),
-      initialState: initialStateFunction,
+    const builder: StateBuilder<States | S, Datas | UnvalidatedState<S, D>> = {
+      state: stateFunc,
+      initialState: initialStateFunc,
     };
 
     return builder;

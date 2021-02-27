@@ -97,9 +97,15 @@ export type StateBuilder<StateNames extends StateType, States> = {
   readonly initialState: InitialStateFunc<StateNames, States>;
 }
 
-type InitialStateFunc<StateNames extends StateType, States> = <S extends StateNames, D>(
+export type InitialStateBuilder<StateNames extends StateType, States, IS, ID> = {
+  readonly transition: TransitionFunc<StateNames, States, never, IS, ID>;
+
+  readonly done: () => StateMachine<States, never, IS, ID>;
+}
+
+export type InitialStateFunc<StateNames extends StateType, States> = <S extends StateNames, D>(
   data: IsLegalStateResolveUnvalidatedState<S, D, States>
-) => TransitionBuilder<StateNames, States, never, S, D>
+) => InitialStateBuilder<StateNames, States, S, D>
 
 /**
  * A type that validates that UnvalidatedState<S, D> exists in Datas. If so, resolves to UnvalidatedState<S, D>. If not, resolves
@@ -134,8 +140,30 @@ export type TransitionBuilder<StateNames extends StateType, States, Transitions,
   /**
    * Finalize the state machine type.
    */
-  readonly done: () => StateMachine<States, Transitions, IS, ID>
+  //readonly done: () => StateMachine<States, Transitions, IS, ID>
+
+  readonly action: ActionFunc<StateNames, States, Transitions, IS, ID, never, never>;
 }
+
+export type ActionNameType = string;
+
+export type Action<Name extends ActionNameType, Payload> = { actionName: Name } & Payload;
+
+export type ActionBuilder<StateNames extends StateType, States, Transitions, IS, ID, ActionNames extends ActionNameType, Actions> = {
+  action: ActionFunc<StateNames, States, Transitions, IS, ID, ActionNames, Actions>;
+}
+
+export type ActionFunc<
+  StateNames extends StateType,
+  States,
+  Transitions,
+  IS,
+  ID,
+  ActionNames extends ActionNameType,
+  Actions
+> = <AN extends ActionNameType, AP = {}>(actionName: AssertActionNotDefined<AN, ActionNames>) => ActionBuilder<StateNames, States, Transitions, IS, ID, ActionNames | AN, Actions | Action<AN, AP>>;
+
+type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends ActionNameType> = AN extends ActionNames ? ErrorBrand<'Action already defined'> : AN;
 
 /**
  * A state machine
@@ -208,12 +236,23 @@ const initialState = <StateNames extends StateType, States>(): InitialStateFunc<
 const transition = <StateNames extends StateType, States, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): TransitionFunc<StateNames, States, Transitions, IS, ID> => {
   return <S extends StateNames, N extends StateNames>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
     const transitionFunction = transition<StateNames, States, Transitions | Transition<S, N>, IS, ID>(definition);
+    const actionFunc = action<StateNames, States, Transitions | Transition<States, N>, IS, ID, never, never>(definition);
 
     return {
       transition: transitionFunction,
-      done: done<States, Transitions | Transition<S, N>, IS, ID>(definition)
+      action: actionFunc,
     };
   };
+}
+
+const action = <StateNames extends StateType, States, Transitions, IS, ID, ActionNames extends ActionNameType, Actions>(definition: StateMachineDefinition<IS, ID>): ActionFunc<StateNames, States, Transitions, IS, ID, ActionNames, Actions> => {
+  return <AN extends ActionNameType, AP>(_actionName: AssertActionNotDefined<AN, ActionNames>) => {
+    const actionFunc = action<StateNames, States, Transitions, IS, ID, ActionNames | AN, Actions | Action<AN, AP>>(definition)
+
+    return {
+      action: actionFunc,
+    };
+  }
 }
 
 const done = <StateNames, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<StateNames, Transitions, IS, ID> => {
@@ -231,3 +270,10 @@ const done = <StateNames, Transitions, IS, ID>(definition: StateMachineDefinitio
     };
   }
 }
+
+const x = stateMachine()
+  .state('a')
+  .state('b')
+  .initialState({state: 'a'})
+  .transition('a', 'b')
+  .action<'a'>('a')

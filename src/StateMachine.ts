@@ -21,7 +21,7 @@ type IllegalStateError = 'The specified state has not been declared or the other
 /**
  * States can be represented as string, number, or boolean literals.
  */
-type StateType = string | number | boolean;
+type StateType = string;
 
 /**
  * A branded state-data named tuple to which inline objects will not readily assign. Use this to define your states. Ensures that only

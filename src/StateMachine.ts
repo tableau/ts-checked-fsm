@@ -198,12 +198,13 @@ export type ActionHandlerFunc<
 > = <
   S extends StateNames,
   AN extends ActionNames,
-  N,
+  NS extends StateType,
+  ND,
   AP = {},
 > (
   state: S,
   action: AN,
-  handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, N>
+  handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, NS, ND>
 ) => ActionHandlersBuilder<StateNames, States, Transitions, ActionNames, Actions>;
 
 type ActionHandlerCallback<
@@ -211,19 +212,17 @@ type ActionHandlerCallback<
   States,
   ActionNames extends ActionNameType,
   Transitions,
-  S extends StateNames,
+  CS extends StateNames,
   AN extends ActionNames,
   AP,
-  N
-> = (state: S, action: Action<AN, AP>) => 
-  N extends State<infer SN, infer _> 
-    ? Transition<S, SN> extends Transitions
-    ? N extends States
-    ? N
+  NS extends StateType,
+  ND
+> = (state: CS, action: Action<AN, AP>) => 
+   State<NS, ND> extends States
+    ? Transition<CS, NS> extends Transitions
+    ? State<NS, ND>
     : ErrorBrand<HandlerNotAState>
-    : ErrorBrand<IllegalTransitionError> 
-    : ErrorBrand<HandlerNotAState>;
-
+    : ErrorBrand<IllegalTransitionError>;
 ///
 /// .done()
 ///
@@ -283,7 +282,7 @@ const action = <StateNames extends StateType, States, Transitions, ActionNames e
 }
 
 const actionHandler = <StateNames extends StateType, States, Transitions, ActionNames extends ActionNameType, Actions>(): ActionHandlerFunc<StateNames, States, Transitions, ActionNames, Actions> => {
-  return <S extends StateNames, AN extends ActionNames, N, AP>(state: S, action: AN, handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, N>) => {
+  return <S extends StateNames, AN extends ActionNames, NS extends StateType, ND, AP>(state: S, action: AN, handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, NS, ND>) => {
     const doneFunc: any = done<StateNames, States, Transitions, ActionNames, ActionNameType>();
     const actionHandlerFunc = actionHandler<StateNames, States, Transitions, ActionNames, Actions>();
 
@@ -312,13 +311,13 @@ const x = stateMachine()
   .state('c')
   .transition('a', 'b')
   .transition('b', 'c')
-  .action('a1')
+  .action<'a1', {foo: 27}>('a1')
   .action('a2')
   .actionHandler("a", "a1", (c, a) => {
     return {
       stateName: 'b',
       foo: 'horse'
-    } as const;
+    };
   })
   /*.actionHandlers({
     a: {

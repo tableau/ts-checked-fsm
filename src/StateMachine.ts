@@ -1,12 +1,12 @@
 /**
  * State labels can be strings
  */
-type StateType = string;
+type StateType = IndexType;
 
 /**
  * Action labels can be strings
  */
-export type ActionNameType = string;
+export type ActionNameType = IndexType;
 
 /**
  * Represents a state and data and its corresponding data.
@@ -190,22 +190,22 @@ export type ActionHandlerFunc<
   Transitions,
   ActionsMap
 > = <
-  CS extends StateType,
-  NS extends StateType,
-  AN extends keyof ActionsMap,
+  CS extends keyof StateMap,
+  NS extends keyof StateMap,
   ND,
+  AN extends keyof ActionsMap,
 > (
   state: CS,
   action: AN,
-  handler: ActionHandlerCallback<StateMap, ActionsMap, Transitions, CS, NS, ND, AN>
+  handler: ActionHandlerCallback<StateMap, Transitions, ActionsMap, CS, NS, ND, AN>
 ) => ActionHandlersBuilder<StateMap, Transitions, ActionsMap>;
 
 type ActionHandlerCallback<
   StateMap,
-  ActionsMap,
   Transitions,
-  CS extends StateType,
-  NS extends StateType,
+  ActionsMap,
+  CS extends keyof StateMap,
+  NS extends keyof StateMap,
   ND,
   AN extends keyof ActionsMap,
 > = (state: CS, action: ActionsMap[AN]) => 
@@ -222,8 +222,8 @@ type DoneFunc<States, Actions> = () => StateMachine<States, Actions>;
 /**
  * A state machine
  */
-export type StateMachine<States, Actions> = {
-  nextState: (curState: States, action:Actions) => States,
+export type StateMachine<StateMap, ActionMap> = {
+  nextState: (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]) => StateMap[keyof StateMap],
 };
 
 export const stateMachine: StateMachineFunc = (): StateMachineBuilder => {
@@ -277,9 +277,9 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 }
 
 const actionHandler = <StateMap, Transitions, ActionMap>(): ActionHandlerFunc<StateMap, Transitions, ActionMap> => {
-  return <CS extends keyof StateMap, NS extends keyof StateMap, AN extends keyof ActionMap, ND, AP>(state: CS, action: AN, handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, CS, AN, AP, NS, ND>) => {
-    const doneFunc: any = done<StateNames, States, Transitions, ActionNames, ActionNameType>();
-    const actionHandlerFunc: any = actionHandler<StateNames, States, Transitions, ActionNames, Actions>();
+  return <CS extends keyof StateMap, NS extends keyof StateMap, ND, AN extends keyof ActionMap>(state: CS, action: AN, handler: ActionHandlerCallback<StateMap, Transitions, ActionMap, CS, NS, ND, AN>) => {
+    const doneFunc: any = done<StateMap, Transitions, ActionMap>();
+    const actionHandlerFunc: any = actionHandler<StateMap, Transitions, ActionMap>();
 
     return { 
       actionHandler: actionHandlerFunc,
@@ -288,9 +288,9 @@ const actionHandler = <StateMap, Transitions, ActionMap>(): ActionHandlerFunc<St
   };
 };
 
-const done = <StateNames extends StateType, States, Transitions, ActionNames extends ActionNameType, Actions>() => {
-  return (): StateMachine<States, Actions> => {
-    const nextStateFunction = (curState: States, action: Actions): States => {
+const done = <StateMap, Transitions, ActionMap>() => {
+  return (): StateMachine<StateMap, ActionMap> => {
+    const nextStateFunction = (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]): StateMap[keyof StateMap] => {
       return null!;
     };
 

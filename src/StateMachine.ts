@@ -52,7 +52,7 @@ type IllegalStateError = 'The specified state has not been declared or the other
 type IllegalTransitionError = 'No transition exists from the current state to the returned next state.';
 type ActionAlreadyDeclared = 'An action with this label has already been declared.';
 type NoSuchActionLabel = 'No action exists with this actionName.';
-type NoSuchState = 'The returned state in this handler is not legal';
+type HandlerNotAState = 'The returned value is not a state';
 type NoHandlerForState = 'A state is missing from the handler map';
 type HandlerDeclaredForUnknownState = '';
 
@@ -198,18 +198,31 @@ export type ActionHandlerFunc<
 > = <
   S extends StateNames,
   AN extends ActionNames,
+  N,
+  AP = {},
 > (
   state: S,
   action: AN,
-  handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions>
+  handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, N>
 ) => ActionHandlersBuilder<StateNames, States, Transitions, ActionNames, Actions>;
 
-type ActionHandlerCallback<StateNames extends StateType, States, ActionNames extends ActionNameType, Transitions> = <
+type ActionHandlerCallback<
+  StateNames extends StateType,
+  States,
+  ActionNames extends ActionNameType,
+  Transitions,
   S extends StateNames,
-  N extends States,
   AN extends ActionNames,
-  AP = {}
->(state: S, action: Action<AN, AP>) =>  N extends State<infer SN, infer _> ? Transition<S, SN> extends Transitions ? N : ErrorBrand<IllegalTransitionError> : ErrorBrand<NoSuchState>
+  AP,
+  N
+> = (state: S, action: Action<AN, AP>) => 
+  N extends State<infer SN, infer _> 
+    ? Transition<S, SN> extends Transitions
+    ? N extends States
+    ? N
+    : ErrorBrand<HandlerNotAState>
+    : ErrorBrand<IllegalTransitionError> 
+    : ErrorBrand<HandlerNotAState>;
 
 ///
 /// .done()
@@ -270,7 +283,7 @@ const action = <StateNames extends StateType, States, Transitions, ActionNames e
 }
 
 const actionHandler = <StateNames extends StateType, States, Transitions, ActionNames extends ActionNameType, Actions>(): ActionHandlerFunc<StateNames, States, Transitions, ActionNames, Actions> => {
-  return <S extends StateNames, AN extends ActionNameType>(state: S, action: AN, handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions>) => {
+  return <S extends StateNames, AN extends ActionNames, N, AP>(state: S, action: AN, handler: ActionHandlerCallback<StateNames, States, ActionNames, Transitions, S, AN, AP, N>) => {
     const doneFunc: any = done<StateNames, States, Transitions, ActionNames, ActionNameType>();
     const actionHandlerFunc = actionHandler<StateNames, States, Transitions, ActionNames, Actions>();
 
@@ -298,13 +311,14 @@ const x = stateMachine()
   .state<'b', {foo: 'horse'}>('b')
   .state('c')
   .transition('a', 'b')
+  .transition('b', 'c')
   .action('a1')
   .action('a2')
   .actionHandler("a", "a1", (c, a) => {
     return {
-      state: 'b' as const,
-      foo: 'horse',
-    }
+      stateName: 'b',
+      foo: 'horse'
+    } as const;
   })
   /*.actionHandlers({
     a: {

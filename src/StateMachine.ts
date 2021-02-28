@@ -16,18 +16,6 @@ export type State<S extends StateType, D = {}> = Readonly<D> & {
 }
 
 /**
- * Represents a state transition
- * 
- * Generic Parameters:
- * C current state label
- * N Next State Label
- */
-type Transition<C, N> = {
-  readonly cur: C;
-  readonly next: N
-}
-
-/**
  * Give Actions to nextState() to (maybe) trigger a transition.
  */
 export type Action<Name extends ActionNameType, Payload> = Readonly<Payload> & { 
@@ -61,10 +49,9 @@ type HandlerDeclaredForUnknownState = '';
 type IndexType = string | number | symbol;
 
 /// Validators
-type AssertTInTransitions<Transitions, C extends StateType, N extends StateType> = Transition<C, N> extends Transitions ? C : ErrorBrand<IllegalTransitionError>;
 type AssertSInState<States, S> = S extends States ? S : ErrorBrand<IllegalStateError>;
 type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-type AssertNewTransition<S extends IndexType, N extends IndexType, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
+type AssertNewTransition<S extends IndexType, N extends IndexType, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
 type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends IndexType> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
 type AssertActionNameLegal<ActionNames, ActionName> = ActionName extends ActionNames ? ActionName : ErrorBrand<NoSuchActionLabel>;
 // type AssertHandlerMapComplete<StateNames extends StateType, Map> = [keyof Map] extends [StateNames] ? [StateNames] extends [keyof Map] ? Map : ErrorBrand<NoHandlerForState> : ErrorBrand<HandlerDeclaredForUnknownState>;
@@ -133,7 +120,7 @@ export type TransitionBuilder<StateMap, Transitions> = {
    */
   readonly transition: TransitionFunc<StateMap, Transitions>;
 
-  readonly action: ActionFunc<StateMap, Transitions, {}>;
+  readonly action: ActionFunc<StateMap, Transitions, never>;
 }
 
 /**
@@ -142,6 +129,11 @@ export type TransitionBuilder<StateMap, Transitions> = {
 export type TransitionFunc<StateMap, Transitions> = <S extends keyof StateMap, N extends keyof StateMap>(
   curState: S,
   nextState: AssertNewTransition<S, N, Transitions>
+  // No idea why, but it's very important that our transition map goes from stateKey -> State
+  // *not* stateKey -> stateKey. When we try to compare statekeys alone when searching for valid
+  // transitions based on the return type of an action handler, Typescript will widen
+  // the return type if you try to compare against just the key. Creating a State<S, D> from the
+  // template args and looking that up in the tranistion map does work.
 ) => TransitionBuilder<StateMap, Transitions | Transition<S, N>>;
 
 ///
@@ -181,6 +173,10 @@ export type ActionHandlersBuilder<StateMap, Transitions, ActionsMap> = {
   readonly done: () => StateMachine<StateMap, ActionsMap>,
 }
 
+type Transition<CS extends StateType, NS extends StateType> = {
+  current: CS;
+  next: NS;
+};
 
 /**
  * The Signature of .actionHandler().
@@ -191,12 +187,26 @@ export type ActionHandlerFunc<
   ActionsMap
 > = <
   CS extends keyof StateMap,
-  NS extends StateMap[keyof StateMap],
+  NS extends StateType,
+  ND,
   AN extends keyof ActionsMap,
 > (
   state: CS,
   action: AN,
-  handler: ActionHandlerCallback<StateMap, Transitions, ActionsMap, CS, NS, AN>,
+  handler: (curState: StateMap[CS], action: ActionsMap[AN]) => (
+    NS extends keyof StateMap
+    ? State<NS, ND> extends StateMap[NS]
+    // ? keyof Transitions extends keyof StateMap
+    ? Transition<'b', 'a'> extends Transitions
+    ? State<NS, ND>
+    : never
+    : never
+    : never
+    //: never
+  )
+    
+    
+    
 ) => ActionHandlersBuilder<StateMap, Transitions, ActionsMap>;
 
 type ActionHandlerCallback<
@@ -204,14 +214,18 @@ type ActionHandlerCallback<
   Transitions,
   ActionsMap,
   CS extends keyof StateMap,
-  NS extends StateMap[keyof StateMap],
+  NSS extends keyof StateMap,
+  NDD,
+  NS extends State<NSS, NDD>,
   AN extends keyof ActionsMap,
 > = (state: StateMap[CS], action: ActionsMap[AN]) => 
-   NS extends State<infer NSS, infer NDD>
-    ? Transition<NSS, NSS> extends Transitions
-    ? NS
+    CS extends keyof Transitions
+    ? NSS extends Transitions[CS]
+    //? NSS extends Transitions[CS]
+    ? Readonly<NS>
     : ErrorBrand<IllegalTransitionError>
-    : ErrorBrand<'poop'>;
+    : ErrorBrand<IllegalTransitionError>
+    //: ErrorBrand<'poop'>;
     //: ErrorBrand<HandlerNotAState>;
     
 ///
@@ -252,8 +266,10 @@ const state = <StateMap>(): StateFunc<StateMap> => {
 
 const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitions> => {
   return <S extends keyof StateMap, N extends keyof StateMap>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
-    const transitionFunction = transition<StateMap, Transitions | Transition<S, N>>();
-    const actionFunc = action<StateMap, Transitions | Transition<S, N>, {}>();
+    type NewTransitions = Transitions & { [s in S]: N };
+
+    const transitionFunction = transition<StateMap, NewTransitions>();
+    const actionFunc = action<StateMap, NewTransitions, {}>();
 
     return {
       transition: transitionFunction,
@@ -304,14 +320,14 @@ const x = stateMachine()
   .state('a')
   .state<'b', {foo: 'horse'}>('b')
   .state('c')
-  .transition('a', 'c')
+  .transition('a', 'b')
   .transition('b', 'c')
   .action<'a1', {foo: 27}>('a1')
   .action('a2')
   .actionHandler("a", "a1", (c, a) => {
     return {
-      stateName: 'b' as const,
-      foo: 'horse' as const
+      stateName: 'a',
+      foo: 'horse'
     } as const;
   })
   /*.actionHandlers({

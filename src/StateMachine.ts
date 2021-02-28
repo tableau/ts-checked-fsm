@@ -191,13 +191,12 @@ export type ActionHandlerFunc<
   ActionsMap
 > = <
   CS extends keyof StateMap,
-  NS extends keyof StateMap,
-  ND,
+  NS extends StateMap[keyof StateMap],
   AN extends keyof ActionsMap,
 > (
   state: CS,
   action: AN,
-  handler: ActionHandlerCallback<StateMap, Transitions, ActionsMap, CS, NS, ND, AN>
+  handler: ActionHandlerCallback<StateMap, Transitions, ActionsMap, CS, NS, AN>,
 ) => ActionHandlersBuilder<StateMap, Transitions, ActionsMap>;
 
 type ActionHandlerCallback<
@@ -205,15 +204,16 @@ type ActionHandlerCallback<
   Transitions,
   ActionsMap,
   CS extends keyof StateMap,
-  NS extends keyof StateMap,
-  ND,
+  NS extends StateMap[keyof StateMap],
   AN extends keyof ActionsMap,
-> = (state: CS, action: ActionsMap[AN]) => 
-   State<NS, ND> extends StateMap[keyof StateMap]
-    ? Transition<CS, NS> extends Transitions
-    ? State<NS, ND>
-    : ErrorBrand<HandlerNotAState>
-    : ErrorBrand<IllegalTransitionError>;
+> = (state: StateMap[CS], action: ActionsMap[AN]) => 
+   NS extends State<infer NSS, infer NDD>
+    ? Transition<NSS, NSS> extends Transitions
+    ? NS
+    : ErrorBrand<IllegalTransitionError>
+    : ErrorBrand<'poop'>;
+    //: ErrorBrand<HandlerNotAState>;
+    
 ///
 /// .done()
 ///
@@ -277,7 +277,7 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 }
 
 const actionHandler = <StateMap, Transitions, ActionMap>(): ActionHandlerFunc<StateMap, Transitions, ActionMap> => {
-  return <CS extends keyof StateMap, NS extends keyof StateMap, ND, AN extends keyof ActionMap>(state: CS, action: AN, handler: ActionHandlerCallback<StateMap, Transitions, ActionMap, CS, NS, ND, AN>) => {
+  return <CS extends keyof StateMap, NS extends StateMap[keyof StateMap], AN extends keyof ActionMap>(state: CS, action: AN, handler: ActionHandlerCallback<StateMap, Transitions, ActionMap, CS, NS, AN>) => {
     const doneFunc: any = done<StateMap, Transitions, ActionMap>();
     const actionHandlerFunc: any = actionHandler<StateMap, Transitions, ActionMap>();
 
@@ -310,9 +310,9 @@ const x = stateMachine()
   .action('a2')
   .actionHandler("a", "a1", (c, a) => {
     return {
-      stateName: 'b',
-      foo: 'horse'
-    };
+      stateName: 'b' as const,
+      foo: 'horse' as const
+    } as const;
   })
   /*.actionHandlers({
     a: {

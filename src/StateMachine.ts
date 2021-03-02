@@ -165,7 +165,7 @@ export type ActionFunc<
 export type ActionHandlersBuilder<StateMap, Transitions, ActionsMap, HandledStates extends StateType> = {
   readonly actionHandler: ActionHandlerFunc<StateMap, Transitions, ActionsMap, HandledStates>;
 
-  readonly done: () => StateMachine<StateMap, ActionsMap>,
+  readonly done: DoneFunc<StateMap, ActionsMap, HandledStates>,
 }
 
 type Transition<CS extends StateType, NS extends StateType> = {
@@ -190,7 +190,7 @@ export type ActionHandlerFunc<
   state: S,
   action: AN,
   handler: ActionHandlerCallback<States, Transitions, S, AN, NS, ND, Actions>
-) => ActionHandlersBuilder<States, Transitions, Actions, HandledStates>;
+) => ActionHandlersBuilder<States, Transitions, Actions, HandledStates | S>;
 
 type ActionHandlerCallback<
   States,
@@ -210,7 +210,9 @@ type ActionHandlerCallback<
 ///
 /// .done()
 ///
-type DoneFunc = <States, Actions>() => (() => StateMachine<States, Actions>);
+type DoneBuilder = <StateMap, ActionMap, HandledStates extends StateType>() => DoneFunc<StateMap, ActionMap, HandledStates>;
+
+type DoneFunc<StateMap, ActionMap, HandledStates extends StateType> = (_: keyof StateMap extends HandledStates ? void : ErrorBrand<'horse'>) => StateMachine<StateMap, ActionMap>;
 
 /**
  * A state machine
@@ -277,7 +279,7 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends S
     action: AN,
     handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ND, ActionMap>
   ) => {
-    const doneFunc = done<StateMap, ActionMap>();
+    const doneFunc = done<StateMap, ActionMap, HandledStates | S>();
     const actionHandlerFunc: any = actionHandler<StateMap, Transitions, ActionMap, HandledStates | S>();
 
     return { 
@@ -289,8 +291,10 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends S
   return actionHandlerFunc;
 };
 
-const done: DoneFunc = <StateMap, ActionMap>() => {
-  return (): StateMachine<StateMap, ActionMap> => {
+const done: DoneBuilder = <StateMap, ActionMap, HandledStates extends StateType>() => {
+  const doneFunc: DoneFunc<StateMap, ActionMap, HandledStates> = (
+    _: keyof StateMap extends HandledStates ? void : ErrorBrand<'horse'>
+  ): StateMachine<StateMap, ActionMap> => {
     const nextStateFunction = (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]): StateMap[keyof StateMap] => {
       return null!;
     };
@@ -299,6 +303,8 @@ const done: DoneFunc = <StateMap, ActionMap>() => {
       nextState: nextStateFunction
     };
   }
+
+  return doneFunc
 }
 
 const x = stateMachine()
@@ -307,12 +313,18 @@ const x = stateMachine()
   .state('c')
   .transition('a', 'b')
   .transition('b', 'c')
+  .transition('c', 'c')
   .action<'a1', {foo: 27}>('a1')
   .action('a2')
   .actionHandler("a", "a1", (c, a) => {
     return {
       stateName: 'b',
       foo: 'horse'
+    };
+  })
+  .actionHandler("b", "a1", (c, a) => {
+    return {
+      stateName: 'c',
     };
   })
   .done();

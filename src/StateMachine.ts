@@ -271,6 +271,7 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends S
     const newDefinition: StateMachineDefinition<StateMap, ActionMap> = {
       ...definition,
       handlers: {
+        ...definition.handlers,
         [state]: {
           ...definition.handlers[state as string] ? definition.handlers[state as string] : {},
           [action]: handler as any,
@@ -310,20 +311,3 @@ const done: DoneBuilder = <StateMap, ActionMap, HandledStates extends StateType>
 
   return doneFunc
 }
-
-stateMachine()
-  .state('a')
-  .state('b')
-  .transition('a', 'b')
-  .transition('b', 'b')
-  .action('a1')
-  .actionHandler('a', 'a1', (c, a) => {
-    return {
-      stateName: 'b',
-
-    }
-  })
-  .actionHandler('b', 'a1', (c, a) => {
-    return c;
-  })
-  .done();

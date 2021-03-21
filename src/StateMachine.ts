@@ -56,6 +56,15 @@ type StateMachineDefinition<S, A> = {
   } 
 };
 
+// Allows us to append multiple values for the same key in a type map.
+// If the key already exists in the map, we need to remove it so we can re-add it with a union of the old and new values.
+// If not, just "insert" the new key
+type AddToTypeMap<M, K extends string | number | symbol, V> = 
+  K extends keyof M 
+    ? Omit<M, K> & Readonly<{ [k in K]: M[K] | V }> 
+    : M & Readonly<{ [k in K]: V }>;
+
+
 ///
 /// stateMachine() builder
 ///
@@ -117,7 +126,7 @@ export type TransitionBuilder<StateMap, Transitions> = {
 export type TransitionFunc<StateMap, Transitions> = <S extends keyof StateMap, N extends keyof StateMap>(
   curState: S,
   nextState: AssertNewTransition<S, N, Transitions>
-) => TransitionBuilder<StateMap, Transitions & { [key in S]: N }>;
+) => TransitionBuilder<StateMap, AddToTypeMap<Transitions, S, N>>;
 
 ///
 /// .action() builder
@@ -168,12 +177,11 @@ export type ActionHandlerFunc<
 > = <
   S extends keyof States,
   AN extends keyof Actions,
-  NS extends keyof States,
-  ND,
+  NS extends States[keyof States],
 > (
   state: S,
   action: AN,
-  handler: ActionHandlerCallback<States, Transitions, S, AN, NS, ND, Actions>
+  handler: ActionHandlerCallback<States, Transitions, S, AN, NS, Actions>
 ) => ActionHandlersBuilder<States, Transitions, Actions, HandledStates | S>;
 
 type ActionHandlerCallback<
@@ -181,16 +189,17 @@ type ActionHandlerCallback<
   Transitions,
   CS extends keyof States,
   AN extends keyof Actions,
-  NS extends keyof States,
-  ND,
+  NS extends States[keyof States],
   Actions,
 > = (state: States[CS], action: Actions[AN]) => 
-   State<NS, ND> extends States[NS]
+   NS extends State<infer N, infer ND>
+    ? N extends keyof States
     ? CS extends keyof Transitions
-    ? NS extends Transitions[CS]
-    ? State<NS, ND>
+    ? N extends Transitions[CS]
+    ? State<N, ND>
     : ErrorBrand<IllegalTransitionError>
     : ErrorBrand<IllegalTransitionError>
+    : ErrorBrand<HandlerNotAState>
     : ErrorBrand<HandlerNotAState>;
     
 ///
@@ -234,7 +243,7 @@ const state = <StateMap>(): StateFunc<StateMap> => {
 
 const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitions> => {
   return <S extends keyof StateMap, N extends keyof StateMap>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
-    type NewTransitions = Transitions & { [key in S]: N };
+    type NewTransitions = AddToTypeMap<Transitions, S, N>;
 
     const transitionFunction = transition<StateMap, NewTransitions>();
     const actionFunc = action<StateMap, NewTransitions, {}>();
@@ -261,10 +270,10 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 }
 
 const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends StateType>(definition: StateMachineDefinition<StateMap, ActionMap>): ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> => {
-  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends keyof StateMap, AN extends keyof ActionMap, NS extends keyof StateMap, ND,>(
+  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends keyof StateMap, AN extends keyof ActionMap, NS extends StateMap[keyof StateMap]>(
     state: S,
     action: AN,
-    handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ND, ActionMap>
+    handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ActionMap>
   ) => {
     const newDefinition: StateMachineDefinition<StateMap, ActionMap> = {
       ...definition,
@@ -297,6 +306,12 @@ const done: DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates exten
       const curStateAsState = curState as unknown as State<string, {}>;
       const actionAsAction = action as unknown as Action<string, {}>;
 
+      // If no handler declared for state, state doesn't change.
+      if (definition.handlers[curStateAsState.stateName] == null) {
+        return curState;
+      }
+
+      // If no handler declared for action in given state, state doesn't change.
       return definition.handlers[curStateAsState.stateName][actionAsAction.actionName] != null
         ? definition.handlers[curStateAsState.stateName][actionAsAction.actionName](curState, action)
         : curState;

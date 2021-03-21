@@ -59,3 +59,157 @@ describe('state machine', () => {
         expect(t1.stateName).toBe('a');
     });
 })
+
+describe('compile-time checking', () => {
+    it('should fail when specifying same state twice', () => {
+        stateMachine()
+            .state<'b'>('b')
+            // @ts-expect-error
+            .state<'b'>('b');
+    });
+
+    it('should fail when specifying same state twice, different payload', () => {
+        type Payload = { count: number };
+
+        stateMachine()
+            .state<'b'>('b')
+            // @ts-expect-error
+            .state<'b', Payload>('b');
+    });
+    
+    it('should fail when specifying the same transition twice', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            // @ts-expect-error
+            .transition('a', 'b');
+    });
+
+    it('should fail when declaring transition from non-state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            // @ts-expect-error
+            .transition('c', 'b');
+    });
+
+    it('should fail when declaring transition to non-state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            // @ts-expect-error
+            .transition('a', 'c');
+    });
+
+    it('should fail when declaring same action more than once', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .action('a1');
+    });
+
+    it('should fail when declaring same action more than once', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .action('a1');
+    });
+
+    it('should fail when declaring handler to non-state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .actionHandler('c', 'a1', () => {
+                return {
+                    stateName: 'b'
+                };
+            });
+            
+    });
+
+    it('should fail when declaring handler to non-action', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .actionHandler('a', 'a2', () => {
+                return {
+                    stateName: 'b'
+                };
+            });
+            
+    });
+
+    it('should fail when declaring handler that transitions to non-state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .actionHandler('a', 'a1', () => {
+                return {
+                    stateName: 'c'
+                };
+            });
+    });
+
+
+    it('should fail when declaring handler that makes undeclared transition to legal state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .state<'c'>('c')
+            .transition('a', 'b')
+            .action('a1')
+            // @ts-expect-error
+            .actionHandler('a', 'a1', () => {
+                return {
+                    stateName: 'c'
+                };
+            });
+    });
+
+    it('should succeed when declaring handler that makes declared transition to legal state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            .state<'c'>('c')
+            .transition('a', 'b')
+            .action('a1')
+            .actionHandler('a', 'a1', () => {
+                return {
+                    stateName: 'b' as const
+                };
+            });
+    });
+
+    it('should succeed when declaring handler that makes declared transitions to more than one legal state', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'b'>('b')
+            // .state<'c'>('c')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b'
+                } : {
+                    stateName: 'a'
+                };
+            });
+    });
+})

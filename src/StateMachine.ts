@@ -45,7 +45,7 @@ type IndexType = string | number | symbol;
 
 /// Validators
 type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
+type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
 type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends IndexType> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
 
 type StateMachineDefinition<S, A> = {
@@ -85,7 +85,7 @@ export type StateBuilder<StateMap> = {
    */
   readonly state: StateFunc<StateMap>;
 
-  readonly transition: TransitionFunc<StateMap, never>;
+  readonly transition: TransitionFunc<StateMap, {}>;
 }
 
 /**
@@ -117,7 +117,7 @@ export type TransitionBuilder<StateMap, Transitions> = {
 export type TransitionFunc<StateMap, Transitions> = <S extends keyof StateMap, N extends keyof StateMap>(
   curState: S,
   nextState: AssertNewTransition<S, N, Transitions>
-) => TransitionBuilder<StateMap, Transitions | Transition<S, N>>;
+) => TransitionBuilder<StateMap, Transitions & { [key in S]: N }>;
 
 ///
 /// .action() builder
@@ -154,13 +154,8 @@ export type ActionFunc<
 export type ActionHandlersBuilder<StateMap, Transitions, ActionsMap, HandledStates extends StateType> = {
   readonly actionHandler: ActionHandlerFunc<StateMap, Transitions, ActionsMap, HandledStates>;
 
-  readonly done: DoneFunc<StateMap, ActionsMap, HandledStates>,
+  readonly done: DoneFunc<StateMap, ActionsMap, Transitions, HandledStates>,
 }
-
-type Transition<CS extends StateType, NS extends StateType> = {
-  current: CS;
-  next: NS;
-};
 
 /**
  * The Signature of .actionHandler().
@@ -191,17 +186,20 @@ type ActionHandlerCallback<
   Actions,
 > = (state: States[CS], action: Actions[AN]) => 
    State<NS, ND> extends States[NS]
-    ? Transition<CS, NS> extends Transitions
+    ? CS extends keyof Transitions
+    ? NS extends Transitions[CS]
     ? State<NS, ND>
+    : ErrorBrand<IllegalTransitionError>
     : ErrorBrand<IllegalTransitionError>
     : ErrorBrand<HandlerNotAState>;
     
 ///
 /// .done()
 ///
-type DoneBuilder = <StateMap, ActionMap, HandledStates extends StateType>(definition: StateMachineDefinition<StateMap, ActionMap>) => DoneFunc<StateMap, ActionMap, HandledStates>;
+type DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates extends StateType>(definition: StateMachineDefinition<StateMap, ActionMap>) => DoneFunc<StateMap, ActionMap, Transitions, HandledStates>;
 
-type DoneFunc<StateMap, ActionMap, HandledStates extends StateType> = (_: keyof StateMap extends HandledStates ? void : ErrorBrand<NoHandlerForState>) => StateMachine<StateMap, ActionMap>;
+// Check that the only unhandled states in the handler map are final states (i.e, they have no transitions out of them)
+type DoneFunc<StateMap, ActionMap, Transitions, HandledStates extends StateType> = (_: keyof StateMap extends HandledStates ? void : keyof StateMap extends keyof Transitions ? ErrorBrand<NoHandlerForState> : void) => StateMachine<StateMap, ActionMap>;
 
 /**
  * A state machine
@@ -222,7 +220,7 @@ const state = <StateMap>(): StateFunc<StateMap> => {
   return <S extends StateType, D = {}>(_s: AssertNewState<S, keyof StateMap>) => {
     type NewStateMap = StateMap & { [k in S]: State<S, D> };
 
-    const transitionFunc = transition<NewStateMap, never>();
+    const transitionFunc = transition<NewStateMap, {}>();
     const stateFunc = state<NewStateMap>()
 
     const builder = {
@@ -236,7 +234,7 @@ const state = <StateMap>(): StateFunc<StateMap> => {
 
 const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitions> => {
   return <S extends keyof StateMap, N extends keyof StateMap>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
-    type NewTransitions = Transitions | Transition<S, N>;
+    type NewTransitions = Transitions & { [key in S]: N };
 
     const transitionFunction = transition<StateMap, NewTransitions>();
     const actionFunc = action<StateMap, NewTransitions, {}>();
@@ -279,7 +277,7 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends S
       }
     };
 
-    const doneFunc = done<StateMap, ActionMap, HandledStates | S>(newDefinition);
+    const doneFunc = done<StateMap, ActionMap, Transitions, HandledStates | S>(newDefinition);
     const actionHandlerFunc = actionHandler<StateMap, Transitions, ActionMap, HandledStates | S>(newDefinition);
 
     return { 
@@ -291,9 +289,9 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates extends S
   return actionHandlerFunc;
 };
 
-const done: DoneBuilder = <StateMap, ActionMap, HandledStates extends StateType>(definition: StateMachineDefinition<StateMap, ActionMap>) => {
-  const doneFunc: DoneFunc<StateMap, ActionMap, HandledStates> = (
-    _: keyof StateMap extends HandledStates ? void : ErrorBrand<NoHandlerForState>
+const done: DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates extends StateType>(definition: StateMachineDefinition<StateMap, ActionMap>) => {
+  const doneFunc: DoneFunc<StateMap, ActionMap, Transitions, HandledStates> = (
+    _: keyof StateMap extends HandledStates ? void : keyof StateMap extends keyof Transitions ? ErrorBrand<NoHandlerForState> : void
   ): StateMachine<StateMap, ActionMap> => {
     const nextStateFunction = (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]): StateMap[keyof StateMap] => {
       const curStateAsState = curState as unknown as State<string, {}>;

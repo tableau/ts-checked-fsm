@@ -64,7 +64,7 @@ module.exports = {
     new CopyPkgJsonPlugin({
         new: {
           "name": "ts-checked-fsm",
-          "version": "0.3.0",
+          "version": "0.9.9",
           "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
           "main": "index.js",
           "typings": "types/index.d.ts",

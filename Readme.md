@@ -5,6 +5,8 @@
 ts-checked-fsm provides compile tile validation of state machine transitions leveraging Typescript's powerful type system.
 
 * [Overview](#overview)
+    * [Example](#example)
+    * [Notes](#notes)
 * [Get Started](#get-started)
     * [Requirements](#requirements)
     * [Installation](#installation)
@@ -25,7 +27,7 @@ Examples of things that fail to compile:
 
 The library uses Error branding and intentionally causes failed type assignments to give you quasi-human-readable error messages. There is a ton of type system devil-magic going on here to make all of this happen.
 
-Somewhat complete vending machine example:
+## Example
 ```
   type MoneyPayload = {
       moneyInserted: number,
@@ -116,6 +118,11 @@ Somewhat complete vending machine example:
       expect(n).toEqual({stateName: 'idle'});
 ```
 
+## Notes
+* Self transition are not implicit. You must explicitly declare them if a handler for state `x` is allowed to return state `x`.
+* You don't have to declare handlers for final states (i.e. those that have no transitions out of them). If fact, it's illegal to do so since they have no valid transitions out of them!
+* As shown in the example, states and actions can have a payload.
+* For handlers that can return multiple state types depending on some condition, every state must be a legal transition.
 
 # Get started
 

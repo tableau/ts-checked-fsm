@@ -120,7 +120,7 @@ Somewhat complete vending machine example:
 # Get started
 
 ## Requirements:
-Typescript 3.0+ or equivalent bundler loader (e.g. ts-loader for webpack).
+Typescript 4.0+ or equivalent bundler loader (e.g. ts-loader for webpack).
 
 ## Installation
 Add ts-checked-fsm as a dependency in your package.json.

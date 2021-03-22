@@ -58,6 +58,96 @@ describe('state machine', () => {
         const t1 = nextState({stateName: 'a', count: 8}, {actionName: 'a2'});
         expect(t1.stateName).toBe('a');
     });
+
+    it ('Works for a somewhat interesting scenario', () => {
+        type MoneyPayload = {
+            moneyInserted: number,
+        };
+
+        type ChangePayload = {
+            changeRemaining: number,
+        };
+
+        type InsertMoneyActionPayload = {
+            money: number,
+        };
+
+        const { nextState } = stateMachine()
+            .state('idle')
+            .state<'get-money', MoneyPayload>('get-money')
+            .state<'vend', ChangePayload>('vend')
+            .state<'dispense-change', ChangePayload>('dispense-change')
+            .transition('idle', 'get-money')
+            .transition('get-money', 'get-money')
+            .transition('get-money', 'vend')
+            .transition('vend', 'dispense-change')
+            .transition('dispense-change', 'dispense-change')
+            .transition('dispense-change', 'idle')
+            .action<'insert-money', InsertMoneyActionPayload>('insert-money')
+            .action<'vend-soda'>('vend-soda')
+            .action<'clock-tick'>('clock-tick')
+            .actionHandler('idle', 'insert-money', (_c, a) => {
+                return {
+                    stateName: 'get-money',
+                    moneyInserted: a.money,
+                };
+            })
+            .actionHandler('get-money', 'insert-money', (c, a) => {
+                return {
+                    stateName: 'get-money',
+                    moneyInserted: c.moneyInserted + a.money
+                };
+            })
+            .actionHandler('get-money', 'vend-soda', (c, _a) => {
+                return c.moneyInserted >= 50 ? {
+                    stateName: 'vend',
+                    changeRemaining: c.moneyInserted - 50
+                } : c;
+            })
+            .actionHandler('vend', 'clock-tick', (c, _a) => {
+                return {
+                    stateName: 'dispense-change',
+                    changeRemaining: c.changeRemaining
+                };
+            })
+            .actionHandler('dispense-change', 'clock-tick', (c, _a) => {
+                const coinVal = c.changeRemaining >= 25
+                    ? 25
+                    : c.changeRemaining >= 10
+                    ? 10
+                    : c.changeRemaining >= 5
+                    ? 5
+                    : 1;
+
+                return c.changeRemaining - coinVal > 0 ? {
+                    stateName: 'dispense-change',
+                    changeRemaining: c.changeRemaining - coinVal
+                } : {
+                    stateName: 'idle'
+                };
+            })
+            .done();
+
+            let n = nextState({stateName: 'idle'}, { actionName: 'clock-tick'});
+            // Idle state doesn't repsond to clock-tick, so state is unchanged
+            expect(n).toEqual({stateName: 'idle'});
+            n = nextState({stateName: 'idle'}, { actionName: 'insert-money', money: 25})
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 25});
+            n = nextState(n, { actionName: 'insert-money', money: 25});
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 50});
+            n = nextState(n, { actionName: 'insert-money', money: 27});
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 77});
+            n = nextState(n, { actionName: 'vend-soda'});
+            expect(n).toEqual({stateName: 'vend', changeRemaining: 27});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 27});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 2});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 1});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'idle'});
+    })
 })
 
 describe('compile-time checking', () => {
@@ -310,6 +400,35 @@ describe('compile-time checking', () => {
                 return {
                     stateName: 'b',
                     bar: '8'
+                };
+            });
+    });
+
+    it('should be able to read action payload', () => {
+        type Payload1 = { foo: number };
+        type Payload2 = { bar: number };
+        type ActionPayload = { val: 8 };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .transition('b', 'b')
+            .action<'a1', ActionPayload>('a1')
+            .actionHandler('a', 'a1', (_c, a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: a.val
+                } : {
+                    stateName: 'a',
+                    foo: a.val
+                };
+            })
+            .actionHandler('b', 'a1', (_c, a) => {
+                return {
+                    stateName: 'b',
+                    bar: a.val + 7
                 };
             });
     });

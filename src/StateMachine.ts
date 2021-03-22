@@ -1,10 +1,30 @@
 /**
- * Represents a state transition
+ * State labels can be strings
  */
-type Transition<CurrentState, NextState> = {
-  readonly cur: CurrentState;
-  readonly next: NextState
+type StateType = IndexType;
+
+/**
+ * Action labels can be strings
+ */
+export type ActionNameType = IndexType;
+
+/**
+ * Represents a state and data and its corresponding data.
+ */
+export type State<S extends StateType, D = {}> = Readonly<D> & {
+  readonly stateName: S;
 }
+
+/**
+ * Give Actions to nextState() to (maybe) trigger a transition.
+ */
+export type Action<Name extends ActionNameType, Payload> = Readonly<Payload> & { 
+  readonly actionName: Name 
+};
+
+///
+/// Errors
+///
 
 /**
  * Represents a compiler error message. Error brands prevent really clever users from naming their states as one of the error messages
@@ -16,217 +36,307 @@ type ErrorBrand<T> = Readonly<T> & { _errorBrand: void };
 // type NotAStateTypeError = 'The passed state value is not a state type. States must be string, number, or boolean literal.';
 type StateAlreadyDeclaredError = 'The specified state has already been declared.';
 type TransitionAlreadyDeclaredError = 'This transition has already been declared.';
-type IllegalStateError = 'The specified state has not been declared or the other keys/values in the state object are invalid or missing.';
+type IllegalTransitionError = 'No transition exists from the current state to the returned next state.';
+type ActionAlreadyDeclared = 'An action with this label has already been declared.';
+type HandlerNotAState = 'The returned value is not a state';
+type NoHandlerForState = 'Missing handler for some non-terminal state';
+type ActionAlreadyHandled = 'Action already handled for this state';
 
-/**
- * States can be represented as string, number, or boolean literals.
- */
-type StateType = string | number | boolean;
+type IndexType = string | number | symbol;
 
-/**
- * A branded state-data named tuple to which inline objects will not readily assign. Use this to define your states. Ensures that only
- * states coming out of the validate or initialState call get assigned to your states, guaranteeing (unless you resort to casting) that
- * your state machine is within specification at compile time.
- */
-export type ValidatedState<S, D = {}> = Readonly<D> & {
-  readonly state: S;
+/// Validators
+type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
+type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
+type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends IndexType> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
+type AssertActionNotAlreadyHandled<S extends StateType, AN extends ActionNameType, ActionMap> = 
+  S extends keyof ActionMap
+  ? AN extends ActionMap[S] 
+  ? ErrorBrand<ActionAlreadyHandled>
+  : AN
+  : AN;
+type AssertAllNonTerminalStatesHandled<StateMap, Transitions, HandledStates> = 
+  keyof StateMap extends keyof HandledStates
+  ? void 
+  : keyof Transitions extends keyof HandledStates
+  ? void
+  : ErrorBrand<NoHandlerForState>;
 
-  /**
-   * This is a dummy field for supporting nominal typing to ensure you only assign states that have been validated.
-   * Don't use it.
-   *
-   * See https://michalzalecki.com/nominal-typing-in-typescript/ for more information about nominal typing in Typescript
-   */
-  _brand: void
-}
 
-/**
- * Private
- * An unbranded state and data tuple to which inline objects will readily assign.
- */
-export type UnvalidatedState<S, D = {}> = Readonly<D> & {
-  readonly state: S;
-}
 
-type InferState<S> = S extends MaybeValidatedState<infer S, any> ? S : ErrorBrand<'Passed object is not a state'>;
-
-type TInTransition<Transitions, C, N> = Transition<InferState<C>, InferState<N>> extends Transitions ? C : ErrorBrand<'No transition between specified states'>;
-
-type SInState<States, S> = S extends States ? S : ErrorBrand<'The passed state is not in the set of allowed states'>;
-
-/**
- * Private
- * A possibly validated state and data named tuple.
- */
-type MaybeValidatedState<S, D> = ValidatedState<S, D> | UnvalidatedState<S, D>;
-
-/**
- * Private
- * The state machine definitiion.
- */
-type StateMachineDefinition<IS, ID> = {
-  initialState: ValidatedState<IS, ID>;
+type StateMachineDefinition<S, A> = {
+  handlers: {
+    [s: string]: {
+      [a: string]: (cur: S[keyof S], action: A[keyof A]) => S[keyof S]
+    } 
+  } 
 };
 
-type StateFunc<States extends StateType, Datas, Transitions> = <S extends StateType, Data = {}>(
-  state: AssertNewState<S, States>
-) => StateBuilder<States | S, Datas | UnvalidatedState<S, Data>, Transitions>;
+// Allows us to append multiple values for the same key in a type map.
+// If the key already exists in the map, we need to remove it so we can re-add it with a union of the old and new values.
+// If not, just "insert" the new key
+type AddToTypeMap<M, K extends string | number | symbol, V> = 
+  K extends keyof M 
+    ? Omit<M, K> & Readonly<{ [k in K]: M[K] | V }> 
+    : M & Readonly<{ [k in K]: V }>;
+
+
+///
+/// stateMachine() builder
+///
 
 /**
  * A builder from calling stateMachine().
  */
-export type StateMachineBuilder<States extends StateType, Datas, Transitions> = {
+export type StateMachineBuilder = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: StateFunc<States, Datas, Transitions>;
+  readonly state: StateFunc<{}>;
 }
+
+type StateMachineFunc = () => StateMachineBuilder;
+
+///
+/// .state() builder
+///
 
 /**
  * A builder from calling .state()
  */
-export type StateBuilder<States extends StateType, Datas, Transitions> = {
+export type StateBuilder<StateMap> = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: StateFunc<States, Datas, Transitions>;
+  readonly state: StateFunc<StateMap>;
 
-  /**
-   * Sets the initial state for the state machine
-   */
-  readonly initialState: InitialStateFunc<States, Datas, Transitions>;
+  readonly transition: TransitionFunc<StateMap, {}>;
 }
 
-type InitialStateFunc<States extends StateType, Datas, Transitions> = <S extends States, D>(
-  data: IsLegalStateResolveUnvalidatedState<S, D, Datas>
-) => TransitionBuilder<States, Datas, Transitions, S, D>
+/**
+ * The signature for calling the state function in the builder.
+ */
+type StateFunc<StateMap> = <S extends StateType, Data = {}>(
+  state: AssertNewState<S, keyof StateMap>
+) => StateBuilder<StateMap & { [key in S]: State<S, Data> }>;
+
+///
+/// .transition() builder
+///
 
 /**
- * A type that validates that UnvalidatedState<S, D> exists in Datas. If so, resolves to UnvalidatedState<S, D>. If not, resolves
- * to an ErrorBrand.
+ * The builder returned by .transition()
  */
-type IsLegalStateResolveUnvalidatedState<S extends StateType, D, Datas> = UnvalidatedState<S, D> extends Datas ? UnvalidatedState<S, D> : ErrorBrand<IllegalStateError>;
-
-/**
- * A type that validates that S does not exist in States. If so, resolves to an ErrorBrand. If not, resolves to S.
- */
-type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-
-/**
- * A type that validates that Transition<S, N> does not exist in Transitions. If so, resolves to an ErrorBrand. If not, resolves to N.
- */
-type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = Transition<S, N> extends Transitions ? ErrorBrand<TransitionAlreadyDeclaredError> : N;
-
-type TransitionFunc<States extends StateType, Datas, Transitions, IS, ID> = <S extends States, N extends States>(
-  curState: S,
-  nextState: AssertNewTransition<S, N, Transitions>
-) => TransitionBuilder<States, Datas, Transitions | Transition<S, N>, IS, ID>;
-
-/**
- * A builder from calling .transition()
- */
-export type TransitionBuilder<States extends StateType, Datas, Transitions, IS, ID> = {
+export type TransitionBuilder<StateMap, Transitions> = {
   /**
    * Add a transition to this state machine.
    */
-  readonly transition: TransitionFunc<States, Datas, Transitions, IS, ID>;
+  readonly transition: TransitionFunc<StateMap, Transitions>;
 
-  /**
-   * Finalize the state machine type.
-   */
-  readonly done: () => StateMachine<Datas, Transitions, IS, ID>
+  readonly action: ActionFunc<StateMap, Transitions, {}>;
 }
+
+/**
+ * The signature of .transition()
+ */
+export type TransitionFunc<StateMap, Transitions> = <S extends keyof StateMap, N extends keyof StateMap>(
+  curState: S,
+  nextState: AssertNewTransition<S, N, Transitions>
+) => TransitionBuilder<StateMap, AddToTypeMap<Transitions, S, N>>;
+
+///
+/// .action() builder
+///
+
+export type ActionBuilder<
+  StateMap,
+  Transitions,
+  ActionsMap
+> = {
+  readonly action: ActionFunc<StateMap, Transitions, ActionsMap>;
+  
+  readonly actionHandler: ActionHandlerFunc<
+    StateMap,
+    Transitions,
+    ActionsMap,
+    {}
+  >;
+};
+
+export type ActionFunc<
+  StateMap,
+  Transitions,
+  ActionsMap
+> = <AN extends ActionNameType, AP = {}>(actionName: AssertActionNotDefined<AN, keyof ActionsMap>) => ActionBuilder<StateMap, Transitions, ActionsMap & { [k in AN]: Action<AN, AP> }>;
+
+///
+/// .actionsHandler() builder.
+///
+
+/**
+ * The builder returned by .actionHandler()
+ */
+export type ActionHandlersBuilder<StateMap, Transitions, ActionsMap, HandledStates> = {
+  readonly actionHandler: ActionHandlerFunc<StateMap, Transitions, ActionsMap, HandledStates>;
+
+  readonly done: DoneFunc<StateMap, ActionsMap, Transitions, HandledStates>,
+}
+
+/**
+ * The Signature of .actionHandler().
+ */
+export type ActionHandlerFunc<
+  States,
+  Transitions,
+  Actions,
+  HandledStates
+> = <
+  S extends keyof States,
+  AN extends keyof Actions,
+  NS extends States[keyof States],
+> (
+  state: S,
+  action: AssertActionNotAlreadyHandled<S, AN, HandledStates>,
+  handler: ActionHandlerCallback<States, Transitions, S, AN, NS, Actions>
+) => ActionHandlersBuilder<States, Transitions, Actions, AddToTypeMap<HandledStates, S, AN>>;
+
+type ActionHandlerCallback<
+  States,
+  Transitions,
+  CS extends keyof States,
+  AN extends keyof Actions,
+  NS extends States[keyof States],
+  Actions,
+> = (state: States[CS], action: Actions[AN]) => 
+   NS extends State<infer N, infer ND>
+    ? N extends keyof States
+    ? CS extends keyof Transitions
+    ? N extends Transitions[CS]
+    ? State<N, ND>
+    : ErrorBrand<IllegalTransitionError>
+    : ErrorBrand<IllegalTransitionError>
+    : ErrorBrand<HandlerNotAState>
+    : ErrorBrand<HandlerNotAState>;
+    
+///
+/// .done()
+///
+type DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>) => DoneFunc<StateMap, ActionMap, Transitions, HandledStates>;
+
+// Check that the only unhandled states in the handler map are final states (i.e, they have no transitions out of them)
+type DoneFunc<StateMap, ActionMap, Transitions, HandledStates> = 
+  (_: AssertAllNonTerminalStatesHandled<StateMap, Transitions, HandledStates>) => StateMachine<StateMap, ActionMap>;
 
 /**
  * A state machine
  */
-export type StateMachine<Datas, Transitions, IS, ID> = {
-  validateTransition: ValidateFunction<Datas, Transitions>,
-  initialState: () => ValidatedState<IS, ID>
-}
+export type StateMachine<StateMap, ActionMap> = {
+  nextState: (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]) => StateMap[keyof StateMap],
+};
 
-/**
- * The call signature of the validate function on the StateMachine. Takes a current and next state data tuple (branded or not)
- * and returns the next state as a branded tuple.
- *
- * Will fail to compile if:
- *  1) The data associated with the current state doesn't match the state machine definition.
- *  2) The data associated with the next state doesn't match the state machine definition.
- *  3) The transition from current state to next state isn't a valid transition as per state machine definition
- *
- * Type generic arguments:
- *   States: The set of states in the state machine
- *   Datas: The set of unbranded state-data tuples in the state machine
- *   Transtions: The set of state transitions
- * Call generic arguments:
- *   C: The current state in the state machine. Must exist in the set of States (i.e. extend States)
- *   CD: The data payload type associated with current state. UnvalidatedStateData<C, CD> must exist in Datas
- *   N: The next state in the state machine. Must exist in the set of States (i.e. extend States)
- *   ND: The data payload type associated with the next state. UnvalidatedStateData<N, ND> must exist in Datas
- * @param _cur The current state-data tuple object. May be branded or unbranded.
- * @param next THe next state-data tuple object. May be branded or unbranded.
- * @return The next state as a branded state-data tuple object.
- *
- */
-export type ValidateFunction<Datas, Transitions> = <CS, NS>(
-  _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
-  next: SInState<Datas, NS>
-) => NS & { _brand: void };
+export const stateMachine: StateMachineFunc = (): StateMachineBuilder => {
+  const stateFunc = state<{}>();
 
-export const stateMachine = (): StateMachineBuilder<never, never, never> => {
   return {
-    state: state<never, never, never>()
+    state: stateFunc,
   };
 }
 
-const state = <States extends StateType, Datas, Transitions>(): StateFunc<States, Datas, Transitions> => {
-  return <S extends StateType, D = {}>(_s: AssertNewState<S, States>) => {
-    const initialStateFunction: InitialStateFunc<States | S, Datas | UnvalidatedState<S, D>, Transitions> = initialState();
+const state = <StateMap>(): StateFunc<StateMap> => {
+  return <S extends StateType, D = {}>(_s: AssertNewState<S, keyof StateMap>) => {
+    type NewStateMap = StateMap & { [k in S]: State<S, D> };
 
-    const builder: StateBuilder<States | S, Datas | UnvalidatedState<S, D>, Transitions> = {
-      state: state<States | S, Datas | UnvalidatedState<S, D>, Transitions>(),
-      initialState: initialStateFunction,
+    const transitionFunc = transition<NewStateMap, {}>();
+    const stateFunc = state<NewStateMap>()
+
+    const builder = {
+      state: stateFunc,
+      transition: transitionFunc,
     };
 
     return builder;
   }
 }
 
-const initialState = <States extends StateType, Datas, Transitions>(): InitialStateFunc<States, Datas, Transitions> => {
-  return <S extends States, D = {}>(initialState: IsLegalStateResolveUnvalidatedState<S, D, Datas>) => {
-    const definition: StateMachineDefinition<S, D> = { initialState: initialState as unknown as ValidatedState<S, D> };
+const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitions> => {
+  return <S extends keyof StateMap, N extends keyof StateMap>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
+    type NewTransitions = AddToTypeMap<Transitions, S, N>;
 
-    return {
-      transition: transition<States, Datas, Transitions, S, D>(definition),
-      done: done<Datas, Transitions, S, D>(definition)
-    };
-  };
-}
-
-
-const transition = <States extends StateType, Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): TransitionFunc<States, Datas, Transitions, IS, ID> => {
-  return <S extends States, N extends States>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
-    const transitionFunction = transition<States, Datas, Transitions | Transition<S, N>, IS, ID>(definition);
+    const transitionFunction = transition<StateMap, NewTransitions>();
+    const actionFunc = action<StateMap, NewTransitions, {}>();
 
     return {
       transition: transitionFunction,
-      done: done<Datas, Transitions | Transition<S, N>, IS, ID>(definition)
+      action: actionFunc,
     };
   };
 }
 
-const done = <Datas, Transitions, IS, ID>(definition: StateMachineDefinition<IS, ID>): () => StateMachine<Datas, Transitions, IS, ID> => {
-  return () => {
-    const validateTransitionFunction: ValidateFunction<Datas, Transitions> = <CS, NS>(
-      _cur: TInTransition<Transitions, SInState<Datas, CS>, NS>,
-      next: SInState<Datas, NS>
-    ) => {
-      return next as unknown as NS & { _brand: void };
+const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transitions, ActionMap> => {
+  return <AN extends ActionNameType, AP = {}>(_actionName: AssertActionNotDefined<AN, keyof ActionMap>) => {
+    type NewActionMap = ActionMap & { [key in AN]: Action<AN, AP> };
+
+    const actionFunc: any = action<StateMap, Transitions, NewActionMap>()
+    const actionHandlerFunc = actionHandler<StateMap, Transitions, NewActionMap, {}>({ handlers: {}});
+
+    return {
+      action: actionFunc,
+      actionHandler: actionHandlerFunc,
+    };
+  }
+}
+
+const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>): ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> => {
+  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends keyof StateMap, AN extends keyof ActionMap, NS extends StateMap[keyof StateMap]>(
+    state: S,
+    action: AssertActionNotAlreadyHandled<S, AN, HandledStates>,
+    handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ActionMap>
+  ) => {
+    const newDefinition: StateMachineDefinition<StateMap, ActionMap> = {
+      ...definition,
+      handlers: {
+        ...definition.handlers,
+        [state]: {
+          ...definition.handlers[state as string] ? definition.handlers[state as string] : {},
+          [action]: handler as any,
+        }
+      }
+    };
+
+    const doneFunc = done<StateMap, ActionMap, Transitions, AddToTypeMap<HandledStates, S, AN>>(newDefinition);
+    const actionHandlerFunc = actionHandler<StateMap, Transitions, ActionMap, AddToTypeMap<HandledStates, S, AN>>(newDefinition);
+
+    return { 
+      actionHandler: actionHandlerFunc,
+      done: doneFunc
+    };
+  };
+
+  return actionHandlerFunc;
+};
+
+const done: DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>) => {
+  const doneFunc: DoneFunc<StateMap, ActionMap, Transitions, HandledStates> = (
+    _: AssertAllNonTerminalStatesHandled<StateMap, Transitions, HandledStates>
+  ): StateMachine<StateMap, ActionMap> => {
+    const nextStateFunction = (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]): StateMap[keyof StateMap] => {
+      const curStateAsState = curState as unknown as State<string, {}>;
+      const actionAsAction = action as unknown as Action<string, {}>;
+
+      // If no handler declared for state, state doesn't change.
+      if (definition.handlers[curStateAsState.stateName] == null) {
+        return curState;
+      }
+
+      // If no handler declared for action in given state, state doesn't change.
+      return definition.handlers[curStateAsState.stateName][actionAsAction.actionName] != null
+        ? definition.handlers[curStateAsState.stateName][actionAsAction.actionName](curState, action)
+        : curState;
     };
 
     return {
-      validateTransition: validateTransitionFunction,
-      initialState: () => definition.initialState
+      nextState: nextStateFunction
     };
   }
+
+  return doneFunc
 }

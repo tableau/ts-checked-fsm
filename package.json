@@ -1,17 +1,25 @@
 {
   "name": "ts-checked-fsm",
-  "version": "0.3.0",
+  "version": "0.9.9",
   "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
   "main": "index.js",
   "typings": "types/index.d.ts",
   "scripts": {
     "setup": "yarn install",
-    "build": "webpack --config webpack.config.js"
+    "build": "webpack --config webpack.config.js",
+    "test": "karma start test/karma.conf.js --single-run",
+    "testWatch": "karma start test/karma.conf.js"
   },
   "author": "Rick Weber",
   "license": "ISC",
   "devDependencies": {
+    "@types/jasmine": "3.6.6",
+    "@types/karma": "6.1.0",
     "copy-pkg-json-webpack-plugin": "0.0.39",
+    "karma": "6.2.0",
+    "karma-chrome-launcher": "3.1.0",
+    "karma-jasmine": "4.0.1",
+    "karma-webpack": "5.0.0",
     "ts-loader": "8.0.17",
     "typescript": "4.1.5",
     "webpack": "5.23.0",

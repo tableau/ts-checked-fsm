@@ -1,9 +1,5 @@
 export {
-  StateBuilder,
-  ValidatedState,
-  UnvalidatedState,
+  State,
   stateMachine,
   StateMachine,
-  StateMachineBuilder,
-  TransitionBuilder
 } from './StateMachine';

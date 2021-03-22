@@ -1,11 +1,8 @@
 const path = require('path');
-const CopyPkgJsonPlugin = require('copy-pkg-json-webpack-plugin');
 
 module.exports = {
 
-  mode: 'development',
-
-  entry: path.resolve(__dirname, 'src', 'index.ts'),
+  entry: path.resolve(__dirname, 'src', 'Index.ts'),
 
   output: {
     path: path.resolve(__dirname, 'lib'),
@@ -26,6 +23,7 @@ module.exports = {
 
   resolve: {
     modules: [
+      path.resolve(__dirname, 'src'),
       'node_modules'
     ],
     extensions: ['.ts', '.tsx', '.js']
@@ -38,7 +36,9 @@ module.exports = {
         use: {
           loader: 'ts-loader',
           options: {
-            configFile: path.resolve(__dirname, 'src', 'tsconfig.json')
+            compilerOptions: {
+              outDir: '.',
+            }
           }
         }
       },
@@ -59,19 +59,4 @@ module.exports = {
       amd: 'redux-saga',
     }
   },
-
-  plugins: [
-    new CopyPkgJsonPlugin({
-        new: {
-          "name": "ts-checked-fsm",
-          "version": "0.9.9",
-          "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
-          "main": "index.js",
-          "typings": "types/index.d.ts",
-          "author": "Rick Weber",
-          "license": "ISC",
-        },
-    })
-  ]
 };
-

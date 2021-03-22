@@ -274,6 +274,7 @@ describe('compile-time checking', () => {
                     foo: '7'
                 };
             })
+            // @ts-expect-error
             .actionHandler('a', 'a1', (_c, _a) => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
@@ -283,5 +284,137 @@ describe('compile-time checking', () => {
                     foo: '7'
                 };
             });
+    });
+
+    it('should allow declaring same handler different state', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .transition('b', 'b')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '7'
+                };
+            })
+            .actionHandler('b', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'b',
+                    bar: '8'
+                };
+            });
+    });
+
+    it('Should fail when missing handler for non-terminal state (self-transition)', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .transition('b', 'b')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '7'
+                };
+            })
+            // @ts-expect-error
+            .done();
+    });
+
+    it('Should fail when missing handler for non-terminal state', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .state<'c', Payload2>('c')
+            .transition('a', 'b')
+            .transition('b', 'c')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'b',
+                    bar: '8',
+                }
+            })
+            // @ts-expect-error
+            .done();
+    });
+
+    it('Should succed all non-terminal handlers are declared', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .state<'c', Payload2>('c')
+            .transition('a', 'b')
+            .transition('b', 'c')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'b',
+                    bar: '8',
+                }
+            })
+            .actionHandler('b', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'c',
+                    bar: '8',
+                }
+            })
+            .done();
+    });
+
+    it('Should succeed when all handlers are declared (no terminal states)', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .state<'c', Payload2>('c')
+            .transition('a', 'b')
+            .transition('b', 'c')
+            .transition('c', 'a')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'b',
+                    bar: '8',
+                }
+            })
+            .actionHandler('b', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'c',
+                    bar: '8',
+                }
+            })
+            .actionHandler('c', 'a1', (_c, _a) => {
+                return {
+                    stateName: 'a',
+                    foo: '7',
+                }
+            })
+            .done();
     });
 })

@@ -200,7 +200,6 @@ describe('compile-time checking', () => {
         stateMachine()
             .state<'a'>('a')
             .state<'b'>('b')
-            // .state<'c'>('c')
             .transition('a', 'b')
             .transition('a', 'a')
             .action('a1')
@@ -209,6 +208,79 @@ describe('compile-time checking', () => {
                     stateName: 'b'
                 } : {
                     stateName: 'a'
+                };
+            });
+    });
+
+    it('should succeed when declaring handler that makes declared transitions to more than one legal state (with payload)', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '7'
+                };
+            });
+    });
+
+    it('should fail when declaring handler that makes declared transitions to legal state, but bad payload', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .action('a1')
+            // @ts-expect-error
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '9'
+                };
+            });
+    });
+
+    it('should fail when declaring handler for same state+action', () => {
+        type Payload1 = { foo: '7' };
+        type Payload2 = { bar: '8' };
+
+        stateMachine()
+            .state<'a', Payload1>('a')
+            .state<'b', Payload2>('b')
+            .transition('a', 'b')
+            .transition('a', 'a')
+            .action('a1')
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '7'
+                };
+            })
+            .actionHandler('a', 'a1', (_c, _a) => {
+                return Math.random () > 0.5 ? {
+                    stateName: 'b',
+                    bar: '8'
+                } : {
+                    stateName: 'a',
+                    foo: '7'
                 };
             });
     });

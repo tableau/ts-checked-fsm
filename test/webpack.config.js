@@ -7,9 +7,8 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'lib'),
     filename: 'index.js',
-    library: 'redux-saga-observer',
-    libraryTarget: 'umd',
-    umdNamedDefine: true
+    library: 'ts-checked-fsm',
+    libraryTarget: 'commonjs',
   },
 
   stats: {

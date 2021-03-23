@@ -2,21 +2,19 @@ const path = require('path');
 const CopyPkgJsonPlugin = require('copy-pkg-json-webpack-plugin');
 
 module.exports = {
-
-  mode: 'development',
+  mode: 'production',
 
   entry: path.resolve(__dirname, 'src', 'index.ts'),
 
   output: {
     path: path.resolve(__dirname, 'lib'),
     filename: 'index.js',
-    library: 'redux-saga-observer',
-    libraryTarget: 'umd',
-    umdNamedDefine: true
+    library: {
+      type: 'commonjs'
+    }
   },
 
   stats: {
-    assets: false,
     colors: true,
     hash: false,
     version: false
@@ -45,26 +43,11 @@ module.exports = {
     ],
   },
 
-  externals: {
-    'redux': {
-      root: 'redux',
-      commonjs: 'redux',
-      commonjs2: 'redux',
-      amd: 'redux',
-    },
-    'react-saga': {
-      root: 'redux-saga',
-      commonjs: 'redux-saga',
-      commonjs2: 'redux-saga',
-      amd: 'redux-saga',
-    }
-  },
-
   plugins: [
     new CopyPkgJsonPlugin({
         new: {
           "name": "ts-checked-fsm",
-          "version": "1.0.0",
+          "version": "1.0.4",
           "description": "A typescript library for defining state machine types with compile-time transition validation. Types are fun.",
           "main": "index.js",
           "typings": "types/index.d.ts",

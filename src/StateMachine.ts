@@ -55,10 +55,10 @@ type AssertActionNotAlreadyHandled<S extends StateType, AN extends ActionNameTyp
   : AN
   : AN;
 type AssertAllNonTerminalStatesHandled<StateMap, Transitions, HandledStates> = 
-  keyof StateMap extends keyof HandledStates
-  ? void 
-  : keyof Transitions extends keyof HandledStates
+  keyof Transitions extends HandledStates
+  ? HandledStates extends keyof Transitions 
   ? void
+  : void
   : ErrorBrand<NoHandlerForState>;
 
 
@@ -158,7 +158,7 @@ export type ActionBuilder<
     StateMap,
     Transitions,
     ActionsMap,
-    {}
+    never
   >;
 };
 
@@ -195,9 +195,9 @@ export type ActionHandlerFunc<
   NS extends States[keyof States],
 > (
   state: S,
-  action: AssertActionNotAlreadyHandled<S, AN, HandledStates>,
+  action: AN, // TODO: Checking that the action and state pair haven't already been declared here causes
   handler: ActionHandlerCallback<States, Transitions, S, AN, NS, Actions>
-) => ActionHandlersBuilder<States, Transitions, Actions, AddToTypeMap<HandledStates, S, AN>>;
+) => ActionHandlersBuilder<States, Transitions, Actions, HandledStates | S>;
 
 type ActionHandlerCallback<
   States,
@@ -276,7 +276,7 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
     type NewActionMap = ActionMap & { [key in AN]: Action<AN, AP> };
 
     const actionFunc: any = action<StateMap, Transitions, NewActionMap>()
-    const actionHandlerFunc = actionHandler<StateMap, Transitions, NewActionMap, {}>({ handlers: {}});
+    const actionHandlerFunc = actionHandler<StateMap, Transitions, NewActionMap, never>({ handlers: {}});
 
     return {
       action: actionFunc,
@@ -288,7 +288,7 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>): ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> => {
   const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends keyof StateMap, AN extends keyof ActionMap, NS extends StateMap[keyof StateMap]>(
     state: S,
-    action: AssertActionNotAlreadyHandled<S, AN, HandledStates>,
+    action: AN,
     handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ActionMap>
   ) => {
     const newDefinition: StateMachineDefinition<StateMap, ActionMap> = {
@@ -302,8 +302,10 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definiti
       }
     };
 
-    const doneFunc = done<StateMap, ActionMap, Transitions, AddToTypeMap<HandledStates, S, AN>>(newDefinition);
-    const actionHandlerFunc = actionHandler<StateMap, Transitions, ActionMap, AddToTypeMap<HandledStates, S, AN>>(newDefinition);
+    type NextHandledStates = HandledStates | S;
+
+    const doneFunc = done<StateMap, ActionMap, Transitions, NextHandledStates>(newDefinition);
+    const actionHandlerFunc = actionHandler<StateMap, Transitions, ActionMap, NextHandledStates>(newDefinition);
 
     return { 
       actionHandler: actionHandlerFunc,

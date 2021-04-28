@@ -1,24 +1,29 @@
 /**
+ * Valid keys for objects
+ */
+type IndexType = string | number | symbol;
+
+/**
  * State labels can be strings
  */
-type StateType = IndexType;
+type StateName = IndexType;
 
 /**
  * Action labels can be strings
  */
-export type ActionNameType = IndexType;
+export type ActionName = IndexType;
 
 /**
  * Represents a state and data and its corresponding data.
  */
-export type State<S extends StateType, D = {}> = Readonly<D> & {
+export type State<S extends StateName, D = {}> = Readonly<D> & {
   readonly stateName: S;
 }
 
 /**
  * Give Actions to nextState() to (maybe) trigger a transition.
  */
-export type Action<Name extends ActionNameType, Payload> = Readonly<Payload> & { 
+export type Action<Name extends ActionName, Payload> = Readonly<Payload> & { 
   readonly actionName: Name 
 };
 
@@ -41,12 +46,10 @@ type ActionAlreadyDeclared = 'An action with this label has already been declare
 type HandlerNotAState = 'The returned value is not a state';
 type NoHandlerForState = 'Missing handler for some non-terminal state';
 
-type IndexType = string | number | symbol;
-
 /// Validators
-type AssertNewState<S extends StateType, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
-type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends IndexType> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
+type AssertNewState<S extends StateName, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
+type AssertNewTransition<S extends StateName, N extends StateName, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
+type AssertActionNotDefined<AN extends ActionName, ActionNames extends ActionName> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
 type AssertAllNonTerminalStatesHandled<Transitions, HandledStates> = 
   keyof Transitions extends HandledStates
   ? HandledStates extends keyof Transitions 
@@ -67,7 +70,7 @@ type StateMachineDefinition<S, A> = {
 // Allows us to append multiple values for the same key in a type map.
 // If the key already exists in the map, we need to remove it so we can re-add it with a union of the old and new values.
 // If not, just "insert" the new key
-type AddToTypeMap<M, K extends string | number | symbol, V> = 
+type AddToTypeMap<M, K extends IndexType, V> =
   K extends keyof M 
     ? Omit<M, K> & Readonly<{ [k in K]: M[K] | V }> 
     : M & Readonly<{ [k in K]: V }>;
@@ -108,7 +111,7 @@ export type StateBuilder<StateMap> = {
 /**
  * The signature for calling the state function in the builder.
  */
-type StateFunc<StateMap> = <S extends StateType, Data = {}>(
+type StateFunc<StateMap> = <S extends StateName, Data = {}>(
   state: AssertNewState<S, keyof StateMap>
 ) => StateBuilder<StateMap & { [key in S]: State<S, Data> }>;
 
@@ -159,7 +162,7 @@ export type ActionFunc<
   StateMap,
   Transitions,
   ActionsMap
-> = <AN extends ActionNameType, AP = {}>(actionName: AssertActionNotDefined<AN, keyof ActionsMap>) => ActionBuilder<StateMap, Transitions, ActionsMap & { [k in AN]: Action<AN, AP> }>;
+> = <AN extends ActionName, AP = {}>(actionName: AssertActionNotDefined<AN, keyof ActionsMap>) => ActionBuilder<StateMap, Transitions, ActionsMap & { [k in AN]: Action<AN, AP> }>;
 
 ///
 /// .actionsHandler() builder.
@@ -235,7 +238,7 @@ export const stateMachine: StateMachineFunc = (): StateMachineBuilder => {
 }
 
 const state = <StateMap>(): StateFunc<StateMap> => {
-  return <S extends StateType, D = {}>(_s: AssertNewState<S, keyof StateMap>) => {
+  return <S extends StateName, D = {}>(_s: AssertNewState<S, keyof StateMap>) => {
     type NewStateMap = StateMap & { [k in S]: State<S, D> };
 
     const transitionFunc = transition<NewStateMap, {}>();
@@ -265,7 +268,7 @@ const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitio
 }
 
 const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transitions, ActionMap> => {
-  return <AN extends ActionNameType, AP = {}>(_actionName: AssertActionNotDefined<AN, keyof ActionMap>) => {
+  return <AN extends ActionName, AP = {}>(_actionName: AssertActionNotDefined<AN, keyof ActionMap>) => {
     type NewActionMap = ActionMap & { [key in AN]: Action<AN, AP> };
 
     const actionFunc: any = action<StateMap, Transitions, NewActionMap>()

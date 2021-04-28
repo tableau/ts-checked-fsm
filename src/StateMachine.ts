@@ -1,29 +1,24 @@
 /**
- * Valid keys for objects
- */
-type IndexType = string | number | symbol;
-
-/**
  * State labels can be strings
  */
-type StateName = IndexType;
+type StateType = IndexType;
 
 /**
  * Action labels can be strings
  */
-export type ActionName = IndexType;
+export type ActionNameType = IndexType;
 
 /**
  * Represents a state and data and its corresponding data.
  */
-export type State<S extends StateName, D = {}> = Readonly<D> & {
+export type State<S extends StateType, D = {}> = Readonly<D> & {
   readonly stateName: S;
 }
 
 /**
  * Give Actions to nextState() to (maybe) trigger a transition.
  */
-export type Action<Name extends ActionName, Payload> = Readonly<Payload> & { 
+export type Action<Name extends ActionNameType, Payload> = Readonly<Payload> & { 
   readonly actionName: Name 
 };
 
@@ -36,45 +31,33 @@ export type Action<Name extends ActionName, Payload> = Readonly<Payload> & {
  * and subverting error checking. Yet, the compiler still displays the string at the end of the failed cast indicating what the
  * issue is rather than something puzzling like could not assign to never.
  */
-type ErrorBrand<T> = Readonly<T> & { _errorBrand: void };
+type ErrorBrand<T extends IndexType> = { [k in T]: void };
 
-// type NotAStateTypeError = 'The passed state value is not a state type. States must be string, number, or boolean literal.';
-type StateAlreadyDeclaredError = 'The specified state has already been declared.';
-type TransitionAlreadyDeclaredError = 'This transition has already been declared.';
-type IllegalTransitionError = 'No transition exists from the current state to the returned next state.';
-type ActionAlreadyDeclared = 'An action with this label has already been declared.';
-type HandlerNotAState = 'The returned value is not a state';
-type NoHandlerForState = 'Missing handler for some non-terminal state';
+type IndexType = string | number;
 
 /// Validators
-type AssertNewState<S extends StateName, States> = S extends States ? ErrorBrand<StateAlreadyDeclaredError> : S;
-type AssertNewTransition<S extends StateName, N extends StateName, Transitions> = S extends keyof Transitions ? N extends Transitions[S] ? ErrorBrand<TransitionAlreadyDeclaredError> : N : N;
-type AssertActionNotDefined<AN extends ActionName, ActionNames extends ActionName> = AN extends ActionNames ? ErrorBrand<ActionAlreadyDeclared> : AN;
+type AssertStateInMap<StateMap, S extends StateType> = S extends MapKeys<StateMap> ? S : ErrorBrand<`'${S}' is not a state`>;
+type AssertNewState<S extends StateType, States> = S extends MapKeys<States> ? ErrorBrand<`'${S}' has already been declared`> : S;
+type AssertNewTransition<S extends StateType, N extends StateType, Transitions> = N extends MapLookup<Transitions, S> ? ErrorBrand<`There already exists a transition from '${S}' to '${N}'`> : N;
+type AssertActionNotDefined<AN extends ActionNameType, ActionNames extends IndexType> = AN extends ActionNames ? ErrorBrand<`Action '${AN}' already declared`> : AN;
 type AssertAllNonTerminalStatesHandled<Transitions, HandledStates> = 
-  keyof Transitions extends HandledStates
-  ? HandledStates extends keyof Transitions 
-  ? void
-  : void
-  : ErrorBrand<NoHandlerForState>;
-
-
+  MapKeys<Transitions> extends HandledStates ? void : ErrorBrand<`No handlers declared for ${Exclude<MapKeys<Transitions>, HandledStates>}`>;
 
 type StateMachineDefinition<S, A> = {
   handlers: {
     [s: string]: {
-      [a: string]: (cur: S[keyof S], action: A[keyof A]) => S[keyof S]
+      [a: string]: (cur: MapValues<S>, action: MapValues<A>) => MapValues<S>
     } 
   } 
 };
 
 // Allows us to append multiple values for the same key in a type map.
-// If the key already exists in the map, we need to remove it so we can re-add it with a union of the old and new values.
-// If not, just "insert" the new key
-type AddToTypeMap<M, K extends IndexType, V> =
-  K extends keyof M 
-    ? Omit<M, K> & Readonly<{ [k in K]: M[K] | V }> 
-    : M & Readonly<{ [k in K]: V }>;
+type AddToTypeMap<M, K extends string | number | symbol, V> = 
+  M | [K , V];
 
+type MapLookup<Map, K extends string | number | symbol> = Map extends [K, infer V] ? V : never;
+type MapKeys<Map> = Map extends [infer K, infer _] ? K extends IndexType ? K : never : never;
+type MapValues<Map> = Map extends [infer _, infer V] ? V : never;
 
 ///
 /// stateMachine() builder
@@ -87,7 +70,7 @@ export type StateMachineBuilder = {
   /**
    * Add a state to this state machine.
    */
-  readonly state: StateFunc<{}>;
+  readonly state: StateFunc<never>;
 }
 
 type StateMachineFunc = () => StateMachineBuilder;
@@ -105,15 +88,15 @@ export type StateBuilder<StateMap> = {
    */
   readonly state: StateFunc<StateMap>;
 
-  readonly transition: TransitionFunc<StateMap, {}>;
+  readonly transition: TransitionFunc<StateMap, never>;
 }
 
 /**
  * The signature for calling the state function in the builder.
  */
-type StateFunc<StateMap> = <S extends StateName, Data = {}>(
-  state: AssertNewState<S, keyof StateMap>
-) => StateBuilder<StateMap & { [key in S]: State<S, Data> }>;
+type StateFunc<StateMap> = <S extends StateType, Data = {}>(
+  state: AssertNewState<S, StateMap>
+) => StateBuilder<AddToTypeMap<StateMap, S, State<S, Data>>>;
 
 ///
 /// .transition() builder
@@ -128,15 +111,15 @@ export type TransitionBuilder<StateMap, Transitions> = {
    */
   readonly transition: TransitionFunc<StateMap, Transitions>;
 
-  readonly action: ActionFunc<StateMap, Transitions, {}>;
+  readonly action: ActionFunc<StateMap, Transitions, never>;
 }
 
 /**
  * The signature of .transition()
  */
-export type TransitionFunc<StateMap, Transitions> = <S extends keyof StateMap, N extends keyof StateMap>(
-  curState: S,
-  nextState: AssertNewTransition<S, N, Transitions>
+export type TransitionFunc<StateMap, Transitions> = <S extends StateType, N extends StateType>(
+  curState: AssertStateInMap<StateMap, S>,
+  nextState: N extends MapKeys<StateMap> ? AssertNewTransition<S, N, Transitions> : ErrorBrand<`${S} is not a declared state`>
 ) => TransitionBuilder<StateMap, AddToTypeMap<Transitions, S, N>>;
 
 ///
@@ -162,7 +145,7 @@ export type ActionFunc<
   StateMap,
   Transitions,
   ActionsMap
-> = <AN extends ActionName, AP = {}>(actionName: AssertActionNotDefined<AN, keyof ActionsMap>) => ActionBuilder<StateMap, Transitions, ActionsMap & { [k in AN]: Action<AN, AP> }>;
+> = <AN extends ActionNameType, AP = {}>(actionName: AssertActionNotDefined<AN, MapKeys<ActionsMap>>) => ActionBuilder<StateMap, Transitions, AddToTypeMap<ActionsMap, AN, Action<AN, AP>>>;
 
 ///
 /// .actionsHandler() builder.
@@ -186,9 +169,9 @@ export type ActionHandlerFunc<
   Actions,
   HandledStates
 > = <
-  S extends keyof States,
-  AN extends keyof Actions,
-  NS extends States[keyof States],
+  S extends StateType,
+  AN extends ActionNameType,
+  NS extends MapValues<States>,
 > (
   state: S,
   action: AN, // TODO: Checking that the action and state pair haven't already been declared here causes
@@ -198,21 +181,21 @@ export type ActionHandlerFunc<
 type ActionHandlerCallback<
   States,
   Transitions,
-  CS extends keyof States,
-  AN extends keyof Actions,
-  NS extends States[keyof States],
+  CS extends StateType,
+  AN extends ActionNameType,
+  NS extends MapValues<States>,
   Actions,
-> = (state: States[CS], action: Actions[AN]) => 
+> = (state: MapLookup<States, CS>, action: MapLookup<Actions, AN>) =>
    NS extends State<infer N, infer ND>
-    ? N extends keyof States
-    ? CS extends keyof Transitions
-    ? N extends Transitions[CS]
+    ? N extends MapKeys<States>
+    ? CS extends MapKeys<Transitions>
+    ? N extends MapLookup<Transitions, CS>
     ? State<N, ND>
-    : ErrorBrand<IllegalTransitionError>
-    : ErrorBrand<IllegalTransitionError>
-    : ErrorBrand<HandlerNotAState>
-    : ErrorBrand<HandlerNotAState>;
-    
+    : ErrorBrand<`No transition declared between ${CS} and ${N}`>
+    : ErrorBrand<`State ${CS} is terminal and has no transitions`>
+    : ErrorBrand<`${N} is not a state`>
+    : ErrorBrand<'The returned value is not a state'>;
+
 ///
 /// .done()
 ///
@@ -226,11 +209,11 @@ type DoneFunc<StateMap, ActionMap, Transitions, HandledStates> =
  * A state machine
  */
 export type StateMachine<StateMap, ActionMap> = {
-  nextState: (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]) => StateMap[keyof StateMap],
+  nextState: (curState: MapValues<StateMap>, action: MapValues<ActionMap>) => MapValues<StateMap>,
 };
 
 export const stateMachine: StateMachineFunc = (): StateMachineBuilder => {
-  const stateFunc = state<{}>();
+  const stateFunc = state<never>();
 
   return {
     state: stateFunc,
@@ -238,10 +221,10 @@ export const stateMachine: StateMachineFunc = (): StateMachineBuilder => {
 }
 
 const state = <StateMap>(): StateFunc<StateMap> => {
-  return <S extends StateName, D = {}>(_s: AssertNewState<S, keyof StateMap>) => {
-    type NewStateMap = StateMap & { [k in S]: State<S, D> };
+  return <S extends StateType, D = {}>(_s: AssertNewState<S, StateMap>) => {
+    type NewStateMap = AddToTypeMap<StateMap, S, State<S, D>>;
 
-    const transitionFunc = transition<NewStateMap, {}>();
+    const transitionFunc = transition<NewStateMap, never>();
     const stateFunc = state<NewStateMap>()
 
     const builder = {
@@ -254,11 +237,14 @@ const state = <StateMap>(): StateFunc<StateMap> => {
 }
 
 const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitions> => {
-  return <S extends keyof StateMap, N extends keyof StateMap>(_curState: S, _next: AssertNewTransition<S, N, Transitions>) => {
+  return <S extends StateType, N extends StateType>(
+    _curState: AssertStateInMap<StateMap, S>,
+    _next: N extends MapKeys<StateMap> ? AssertNewTransition<S, N, Transitions> : ErrorBrand<`${S} is not a declared state`>
+  ) => {
     type NewTransitions = AddToTypeMap<Transitions, S, N>;
 
     const transitionFunction = transition<StateMap, NewTransitions>();
-    const actionFunc = action<StateMap, NewTransitions, {}>();
+    const actionFunc = action<StateMap, NewTransitions, never>();
 
     return {
       transition: transitionFunction,
@@ -268,8 +254,8 @@ const transition = <StateMap, Transitions>(): TransitionFunc<StateMap, Transitio
 }
 
 const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transitions, ActionMap> => {
-  return <AN extends ActionName, AP = {}>(_actionName: AssertActionNotDefined<AN, keyof ActionMap>) => {
-    type NewActionMap = ActionMap & { [key in AN]: Action<AN, AP> };
+  return <AN extends ActionNameType, AP = {}>(_actionName: AssertActionNotDefined<AN, MapKeys<ActionMap>>) => {
+    type NewActionMap = AddToTypeMap<ActionMap, AN, Action<AN, AP>>;
 
     const actionFunc: any = action<StateMap, Transitions, NewActionMap>()
     const actionHandlerFunc = actionHandler<StateMap, Transitions, NewActionMap, never>({ handlers: {}});
@@ -282,7 +268,7 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 }
 
 const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>): ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> => {
-  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends keyof StateMap, AN extends keyof ActionMap, NS extends StateMap[keyof StateMap]>(
+  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends StateType, AN extends ActionNameType, NS extends MapValues<StateMap>>(
     state: S,
     action: AN,
     handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ActionMap>
@@ -316,7 +302,7 @@ const done: DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates>(defi
   const doneFunc: DoneFunc<StateMap, ActionMap, Transitions, HandledStates> = (
     _: AssertAllNonTerminalStatesHandled<Transitions, HandledStates>
   ): StateMachine<StateMap, ActionMap> => {
-    const nextStateFunction = (curState: StateMap[keyof StateMap], action: ActionMap[keyof ActionMap]): StateMap[keyof StateMap] => {
+    const nextStateFunction = (curState: MapValues<StateMap>, action: MapValues<ActionMap>): MapValues<StateMap> => {
       const curStateAsState = curState as unknown as State<string, {}>;
       const actionAsAction = action as unknown as Action<string, {}>;
 

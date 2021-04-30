@@ -28,7 +28,7 @@ Examples of things that fail to compile:
 The library uses Error branding and intentionally causes failed type assignments to give you quasi-human-readable error messages. There is a ton of type system devil-magic going on here to make all of this happen.
 
 ## Example
-```
+```ts
   type MoneyPayload = {
       moneyInserted: number,
   };

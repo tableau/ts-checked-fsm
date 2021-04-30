@@ -9,8 +9,8 @@ describe('state machine', () => {
             .action('a1')
             .actionHandler('a', 'a1', (_c, _) => {
                 return {
-                    stateName: 'b' as const,
-                };
+                    stateName: 'b',
+                } as const;
             })
             .done();
 
@@ -418,18 +418,18 @@ describe('compile-time checking', () => {
             .action<'a1', ActionPayload>('a1')
             .actionHandler('a', 'a1', (_c, a) => {
                 return Math.random () > 0.5 ? {
-                    stateName: 'b' as const,
+                    stateName: 'b',
                     bar: a.val
-                } : {
-                    stateName: 'a' as const,
+                } as const : {
+                    stateName: 'a',
                     foo: a.val
-                };
+                } as const;
             })
             .actionHandler('b', 'a1', (_c, a) => {
                 return {
-                    stateName: 'b' as const,
+                    stateName: 'b',
                     bar: a.val + 7
-                };
+                } as const;
             });
     });
 

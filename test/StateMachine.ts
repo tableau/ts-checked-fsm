@@ -10,7 +10,7 @@ describe('state machine', () => {
             .actionHandler('a', 'a1', (_c, _) => {
                 return {
                     stateName: 'b',
-                };
+                } as const;
             })
             .done();
 
@@ -29,7 +29,7 @@ describe('state machine', () => {
             .action('a2')
             .actionHandler('a', 'a1', (_c, _) => {
                 return {
-                    stateName: 'b',
+                    stateName: 'b' as const,
                 };
             })
             .done();
@@ -49,7 +49,7 @@ describe('state machine', () => {
             .action('a2')
             .actionHandler('a', 'a1', (_c, _) => {
                 return {
-                    stateName: 'b',
+                    stateName: 'b' as const,
                     count: 7,
                 };
             })
@@ -88,25 +88,25 @@ describe('state machine', () => {
             .action<'clock-tick'>('clock-tick')
             .actionHandler('idle', 'insert-money', (_c, a) => {
                 return {
-                    stateName: 'get-money',
+                    stateName: 'get-money' as const,
                     moneyInserted: a.money,
                 };
             })
             .actionHandler('get-money', 'insert-money', (c, a) => {
                 return {
-                    stateName: 'get-money',
+                    stateName: 'get-money' as const,
                     moneyInserted: c.moneyInserted + a.money
                 };
             })
             .actionHandler('get-money', 'vend-soda', (c, _a) => {
                 return c.moneyInserted >= 50 ? {
-                    stateName: 'vend',
+                    stateName: 'vend' as const,
                     changeRemaining: c.moneyInserted - 50
                 } : c;
             })
             .actionHandler('vend', 'clock-tick', (c, _a) => {
                 return {
-                    stateName: 'dispense-change',
+                    stateName: 'dispense-change' as const,
                     changeRemaining: c.changeRemaining
                 };
             })
@@ -120,10 +120,10 @@ describe('state machine', () => {
                     : 1;
 
                 return c.changeRemaining - coinVal > 0 ? {
-                    stateName: 'dispense-change',
+                    stateName: 'dispense-change' as const,
                     changeRemaining: c.changeRemaining - coinVal
                 } : {
-                    stateName: 'idle'
+                    stateName: 'idle' as const
                 };
             })
             .done();
@@ -189,7 +189,7 @@ describe('compile-time checking', () => {
             .state<'a'>('a')
             .state<'b'>('b')
             // @ts-expect-error
-            .transition('a', 'c');
+            .transition('a', 'c')
     });
 
     it('should fail when declaring same action more than once', () => {
@@ -267,7 +267,7 @@ describe('compile-time checking', () => {
             // @ts-expect-error
             .actionHandler('a', 'a1', () => {
                 return {
-                    stateName: 'c'
+                    stateName: 'c' as const
                 };
             });
     });
@@ -295,9 +295,9 @@ describe('compile-time checking', () => {
             .action('a1')
             .actionHandler('a', 'a1', (_c, _a) => {
                 return Math.random () > 0.5 ? {
-                    stateName: 'b'
+                    stateName: 'b' as const
                 } : {
-                    stateName: 'a'
+                    stateName: 'a' as const
                 };
             });
     });
@@ -316,10 +316,10 @@ describe('compile-time checking', () => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: '8'
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: '7'
-                };
+                } as const;
             });
     });
 
@@ -360,19 +360,19 @@ describe('compile-time checking', () => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: '8'
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: '7'
-                };
+                } as const;
             })
             .actionHandler('a', 'a1', (_c, _a) => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: '8'
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: '7'
-                };
+                } as const;
             });
     });
 
@@ -391,16 +391,16 @@ describe('compile-time checking', () => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: '8'
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: '7'
-                };
+                } as const;
             })
             .actionHandler('b', 'a1', (_c, _a) => {
                 return {
                     stateName: 'b',
                     bar: '8'
-                };
+                } as const;
             });
     });
 
@@ -420,16 +420,16 @@ describe('compile-time checking', () => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: a.val
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: a.val
-                };
+                } as const;
             })
             .actionHandler('b', 'a1', (_c, a) => {
                 return {
                     stateName: 'b',
                     bar: a.val + 7
-                };
+                } as const;
             });
     });
 
@@ -448,10 +448,10 @@ describe('compile-time checking', () => {
                 return Math.random () > 0.5 ? {
                     stateName: 'b',
                     bar: '8'
-                } : {
+                } as const : {
                     stateName: 'a',
                     foo: '7'
-                };
+                } as const;
             })
             // @ts-expect-error
             .done();
@@ -472,7 +472,7 @@ describe('compile-time checking', () => {
                 return {
                     stateName: 'b',
                     bar: '8',
-                }
+                } as const;
             })
             // @ts-expect-error
             .done();
@@ -493,13 +493,13 @@ describe('compile-time checking', () => {
                 return {
                     stateName: 'b',
                     bar: '8',
-                }
+                } as const;
             })
             .actionHandler('b', 'a1', (_c, _a) => {
                 return {
                     stateName: 'c',
                     bar: '8',
-                }
+                } as const;
             })
             .done();
     });
@@ -520,19 +520,19 @@ describe('compile-time checking', () => {
                 return {
                     stateName: 'b',
                     bar: '8',
-                }
+                } as const;
             })
             .actionHandler('b', 'a1', (_c, _a) => {
                 return {
                     stateName: 'c',
                     bar: '8',
-                }
+                } as const
             })
             .actionHandler('c', 'a1', (_c, _a) => {
                 return {
                     stateName: 'a',
                     foo: '7',
-                }
+                } as const;
             })
             .done();
     });

@@ -59,25 +59,25 @@ The library uses Error branding and intentionally causes failed type assignments
           return {
               stateName: 'get-money',
               moneyInserted: a.money,
-          };
+          } as const;
       })
       .actionHandler('get-money', 'insert-money', (c, a) => {
           return {
               stateName: 'get-money',
               moneyInserted: c.moneyInserted + a.money
-          };
+          } as const;
       })
       .actionHandler('get-money', 'vend-soda', (c, _a) => {
           return c.moneyInserted >= 50 ? {
               stateName: 'vend',
               changeRemaining: c.moneyInserted - 50
-          } : c;
+          } as const : c as const;
       })
       .actionHandler('vend', 'clock-tick', (c, _a) => {
           return {
               stateName: 'dispense-change',
               changeRemaining: c.changeRemaining
-          };
+          } as const;
       })
       .actionHandler('dispense-change', 'clock-tick', (c, _a) => {
           const coinVal = c.changeRemaining >= 25
@@ -91,9 +91,9 @@ The library uses Error branding and intentionally causes failed type assignments
           return c.changeRemaining - coinVal > 0 ? {
               stateName: 'dispense-change',
               changeRemaining: c.changeRemaining - coinVal
-          } : {
+          } as const : {
               stateName: 'idle'
-          };
+          } as const;
       })
       .done();
 
@@ -123,6 +123,9 @@ The library uses Error branding and intentionally causes failed type assignments
 * You don't have to declare handlers for final states (i.e. those that have no transitions out of them). If fact, it's illegal to do so since they have no valid transitions out of them!
 * As shown in the example, states and actions can have a payload.
 * For handlers that can return multiple state types depending on some condition, every state must be a legal transition.
+
+## How it works
+This library uses clever constructions using Typescript's type system. More details in this blog [post](https://engineering.tableau.com/really-advanced-typescript-types-c590eee59a12).
 
 # Get started
 

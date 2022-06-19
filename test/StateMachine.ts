@@ -722,5 +722,22 @@ describe('compile-time checking', () => {
                 return NO_DOC;
             })
             .done();
-    })
+    });
+
+    it('Should not allow specifying a state that does not reflect the argument', () => {
+        stateMachine()
+            .state<'a'>(
+                // @ts-expect-error
+                `face`
+            );
+    });
+
+    it('Should not allow circumventing errors by using ErrorBrand strings', () => {
+        stateMachine()
+            .state<'a'>('a')
+            .state<'a'>(
+                // @ts-expect-error
+                `'a' has already been declared`
+            );
+    });
 })

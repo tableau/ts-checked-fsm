@@ -154,8 +154,10 @@ describe('compile-time checking', () => {
     it('should fail when specifying same state twice', () => {
         stateMachine()
             .state<'b'>('b')
-            // @ts-expect-error
-            .state<'b'>('b');
+            .state<'b'>(
+                // @ts-expect-error
+                'b'
+            );
     });
 
     it('should fail when specifying same state twice, different payload', () => {
@@ -163,8 +165,10 @@ describe('compile-time checking', () => {
 
         stateMachine()
             .state<'b'>('b')
-            // @ts-expect-error
-            .state<'b', Payload>('b');
+            .state<'b', Payload>(
+                // @ts-expect-error
+                'b'
+            );
     });
     
     it('should fail when specifying the same transition twice', () => {
@@ -172,24 +176,33 @@ describe('compile-time checking', () => {
             .state<'a'>('a')
             .state<'b'>('b')
             .transition('a', 'b')
-            // @ts-expect-error
-            .transition('a', 'b');
+            .transition(
+                'a',
+                // @ts-expect-error
+                'b'
+            );
     });
 
     it('should fail when declaring transition from non-state', () => {
         stateMachine()
             .state<'a'>('a')
             .state<'b'>('b')
-            // @ts-expect-error
-            .transition('c', 'b');
+            .transition(
+                // @ts-expect-error
+                'c',
+                'b'
+            );
     });
 
     it('should fail when declaring transition to non-state', () => {
         stateMachine()
             .state<'a'>('a')
             .state<'b'>('b')
-            // @ts-expect-error
-            .transition('a', 'c')
+            .transition(
+                'a',
+                // @ts-expect-error
+                'c'
+            );
     });
 
     it('should fail when declaring same action more than once', () => {
@@ -198,8 +211,10 @@ describe('compile-time checking', () => {
             .state<'b'>('b')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .action('a1');
+            .action(
+                // @ts-expect-error
+                'a1'
+            );
     });
 
     it('should fail when declaring same action more than once', () => {
@@ -208,8 +223,10 @@ describe('compile-time checking', () => {
             .state<'b'>('b')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .action('a1');
+            .action(
+                // @ts-expect-error
+                'a1'
+            );
     });
 
     it('should fail when declaring handler to non-state', () => {
@@ -218,13 +235,16 @@ describe('compile-time checking', () => {
             .state<'b'>('b')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .actionHandler('c', 'a1', () => {
-                return {
-                    stateName: 'b'
-                };
-            });
-            
+            .actionHandler(
+                // @ts-expect-error
+                'c',
+                'a1',
+                () => {
+                    return {
+                        stateName: 'b' as const
+                    };
+                }
+            );
     });
 
     it('should fail when declaring handler to non-action', () => {
@@ -233,13 +253,16 @@ describe('compile-time checking', () => {
             .state<'b'>('b')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .actionHandler('a', 'a2', () => {
-                return {
-                    stateName: 'b'
-                };
-            });
-            
+            .actionHandler(
+                'a',
+                // @ts-expect-error
+                'a2',
+                () => {
+                    return {
+                        stateName: 'b' as const
+                    };
+                }
+            );            
     });
 
     it('should fail when declaring handler that transitions to non-state', () => {
@@ -248,14 +271,17 @@ describe('compile-time checking', () => {
             .state<'b'>('b')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .actionHandler('a', 'a1', () => {
-                return {
-                    stateName: 'c'
-                };
-            });
+            .actionHandler(
+                'a',
+                'a1',
+                // @ts-expect-error
+                () => {
+                    return {
+                        stateName: 'c' as const
+                    };
+                }
+            );
     });
-
 
     it('should fail when declaring handler that makes undeclared transition to legal state', () => {
         stateMachine()
@@ -264,12 +290,16 @@ describe('compile-time checking', () => {
             .state<'c'>('c')
             .transition('a', 'b')
             .action('a1')
-            // @ts-expect-error
-            .actionHandler('a', 'a1', () => {
-                return {
-                    stateName: 'c' as const
-                };
-            });
+            .actionHandler(
+                'a',
+                'a1',
+                // @ts-expect-error
+                () => {
+                    return {
+                        stateName: 'c' as const
+                    };
+                }
+            );
     });
 
     it('should succeed when declaring handler that makes declared transition to legal state', () => {
@@ -333,16 +363,20 @@ describe('compile-time checking', () => {
             .transition('a', 'b')
             .transition('a', 'a')
             .action('a1')
-            // @ts-expect-error
-            .actionHandler('a', 'a1', (_c, _a) => {
-                return Math.random () > 0.5 ? {
-                    stateName: 'b',
-                    bar: '8'
-                } : {
-                    stateName: 'a',
-                    foo: '9'
-                };
-            });
+            .actionHandler(
+                'a',
+                'a1',
+                // @ts-expect-error
+                (_c, _a) => {
+                    return Math.random () > 0.5 ? {
+                        stateName: 'b' as const,
+                        bar: '8' as const
+                    } : {
+                        stateName: 'a' as const,
+                        foo: '9' as const
+                    };
+                }
+            );
     });
 
     // TODO: Find a way to fix this without causing infinite type complaints

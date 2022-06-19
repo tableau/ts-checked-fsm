@@ -268,7 +268,7 @@ const action = <StateMap, Transitions, ActionMap>(): ActionFunc<StateMap, Transi
 }
 
 const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>): ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> => {
-  const actionHandlerFunc: ActionHandlerFunc<StateMap, Transitions, ActionMap, HandledStates> = <S extends StateType, AN extends ActionNameType, NS extends MapValues<StateMap>>(
+  return <S extends StateType, AN extends ActionNameType, NS extends MapValues<StateMap>>(
     state: S,
     action: AN,
     handler: ActionHandlerCallback<StateMap, Transitions, S, AN, NS, ActionMap>
@@ -294,8 +294,6 @@ const actionHandler = <StateMap, Transitions, ActionMap, HandledStates>(definiti
       done: doneFunc
     };
   };
-
-  return actionHandlerFunc;
 };
 
 const done: DoneBuilder = <StateMap, ActionMap, Transitions, HandledStates>(definition: StateMachineDefinition<StateMap, ActionMap>) => {

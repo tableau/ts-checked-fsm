@@ -537,6 +537,96 @@ describe('compile-time checking', () => {
             .done();
     });
 
+    it('Should allow README.md example', () => {
+        type MoneyPayload = {
+            moneyInserted: number,
+        };
+      
+        type ChangePayload = {
+            changeRemaining: number,
+        };
+      
+        type InsertMoneyActionPayload = {
+            money: number,
+        };
+      
+        const { nextState } = stateMachine()
+            .state('idle')
+            .state<'get-money', MoneyPayload>('get-money')
+            .state<'vend', ChangePayload>('vend')
+            .state<'dispense-change', ChangePayload>('dispense-change')
+            .transition('idle', 'get-money')
+            .transition('get-money', 'get-money')
+            .transition('get-money', 'vend')
+            .transition('vend', 'dispense-change')
+            .transition('dispense-change', 'dispense-change')
+            .transition('dispense-change', 'idle')
+            .action<'insert-money', InsertMoneyActionPayload>('insert-money')
+            .action<'vend-soda'>('vend-soda')
+            .action<'clock-tick'>('clock-tick')
+            .actionHandler('idle', 'insert-money', (_c, a) => {
+                return {
+                    stateName: 'get-money',
+                    moneyInserted: a.money,
+                } as const;
+            })
+            .actionHandler('get-money', 'insert-money', (c, a) => {
+                return {
+                    stateName: 'get-money',
+                    moneyInserted: c.moneyInserted + a.money
+                } as const;
+            })
+            .actionHandler('get-money', 'vend-soda', (c, _a) => {
+                return c.moneyInserted >= 50 ? {
+                    stateName: 'vend',
+                    changeRemaining: c.moneyInserted - 50
+                } as const : c;
+            })
+            .actionHandler('vend', 'clock-tick', (c, _a) => {
+                return {
+                    stateName: 'dispense-change',
+                    changeRemaining: c.changeRemaining
+                } as const;
+            })
+            .actionHandler('dispense-change', 'clock-tick', (c, _a) => {
+                const coinVal = c.changeRemaining >= 25
+                    ? 25
+                    : c.changeRemaining >= 10
+                    ? 10
+                    : c.changeRemaining >= 5
+                    ? 5
+                    : 1;
+      
+                return c.changeRemaining - coinVal > 0 ? {
+                    stateName: 'dispense-change',
+                    changeRemaining: c.changeRemaining - coinVal
+                } as const : {
+                    stateName: 'idle'
+                } as const;
+            })
+            .done();
+      
+            let n = nextState({stateName: 'idle'}, { actionName: 'clock-tick'});
+            // Idle state doesn't repsond to clock-tick, so state is unchanged
+            expect(n).toEqual({stateName: 'idle'});
+            n = nextState({stateName: 'idle'}, { actionName: 'insert-money', money: 25})
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 25});
+            n = nextState(n, { actionName: 'insert-money', money: 25});
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 50});
+            n = nextState(n, { actionName: 'insert-money', money: 27});
+            expect(n).toEqual({stateName: 'get-money', moneyInserted: 77});
+            n = nextState(n, { actionName: 'vend-soda'});
+            expect(n).toEqual({stateName: 'vend', changeRemaining: 27});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 27});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 2});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'dispense-change', changeRemaining: 1});
+            n = nextState(n, { actionName: 'clock-tick'});
+            expect(n).toEqual({stateName: 'idle'});
+    })
+
     it('Should allow large state machines', () => {
         const NO_DOC = {
             stateName: 'no-doc' as const

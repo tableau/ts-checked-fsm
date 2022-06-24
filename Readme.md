@@ -71,7 +71,7 @@ The library uses Error branding and intentionally causes failed type assignments
           return c.moneyInserted >= 50 ? {
               stateName: 'vend',
               changeRemaining: c.moneyInserted - 50
-          } as const : c as const;
+          } as const : c;
       })
       .actionHandler('vend', 'clock-tick', (c, _a) => {
           return {
